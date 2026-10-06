@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Manajemen Tanah Kavling</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f0f2f5; color: #1a1a1a; padding-bottom: 80px;
+    font-size: 14px; min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #1e6f5c, #289672);
+    color: white; padding: 16px; position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  header h1 { font-size: 17px; font-weight: 600; }
+  header p { font-size: 12px; opacity: 0.9; margin-top: 2px; }
+  header .top-row {
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  header .logout-btn {
+    background: rgba(255,255,255,0.2); border: none; color: white;
+    padding: 6px 12px; border-radius: 6px; font-size: 12px;
+    font-weight: 600; cursor: pointer;
+  }
+  
+  .container { padding: 12px; max-width: 900px; margin: 0 auto; }
+  
+  .kawasan-tabs {
+    display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .kawasan-tabs button {
+    flex: 1; min-width: 100px; padding: 10px 12px; border: none;
+    background: white; border-radius: 8px; font-weight: 600;
+    font-size: 13px; cursor: pointer; color: #555;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .kawasan-tabs button.active {
+    background: #289672; color: white;
+    box-shadow: 0 3px 8px rgba(40,150,114,0.4);
+  }
+  
+  .nav-menu {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+    margin-bottom: 12px;
+  }
+  .nav-menu button {
+    padding: 10px 6px; border: none; background: white; border-radius: 8px;
+    font-size: 11px; font-weight: 600; cursor: pointer; color: #666;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .nav-menu button.active { background: #1e6f5c; color: white; }
+  .nav-menu button .ico { font-size: 18px; }
+  
+  .card {
+    background: white; border-radius: 12px; padding: 14px;
+    margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .card h3 { font-size: 14px; margin-bottom: 10px; color: #333; }
+  
+  .stat-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+    margin-bottom: 10px;
+  }
+  .stat {
+    background: white; padding: 12px; border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .stat .label { font-size: 11px; color: #888; margin-bottom: 4px; }
+  .stat .value { font-size: 15px; font-weight: 700; color: #1e6f5c; }
+  .stat .value.red { color: #d9534f; }
+  .stat .value.blue { color: #2a7ae2; }
+  
+  .form-group { margin-bottom: 10px; }
+  .form-group label {
+    display: block; font-size: 12px; font-weight: 600;
+    color: #555; margin-bottom: 4px;
+  }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 10px 12px; border: 1.5px solid #ddd;
+    border-radius: 8px; font-size: 14px; font-family: inherit;
+    background: white;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline: none; border-color: #289672;
+  }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  
+  button.primary {
+    width: 100%; padding: 12px; background: #289672; color: white;
+    border: none; border-radius: 8px; font-weight: 600; font-size: 14px;
+    cursor: pointer;
+  }
+  button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.danger { background: #d9534f; }
+  button.secondary { background: #6c757d; }
+  button.small { width: auto; padding: 6px 12px; font-size: 12px; }
+  
+  .list-item {
+    background: white; padding: 12px; border-radius: 10px;
+    margin-bottom: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    border-left: 4px solid #289672;
+  }
+  .list-item.expense { border-left-color: #d9534f; }
+  .list-item .row1 {
+    display: flex; justify-content: space-between; align-items: start;
+    margin-bottom: 6px;
+  }
+  .list-item .title { font-weight: 600; font-size: 14px; }
+  .list-item .amount { font-weight: 700; color: #289672; font-size: 14px; }
+  .list-item.expense .amount { color: #d9534f; }
+  .list-item .meta { font-size: 11px; color: #777; line-height: 1.5; }
+  .list-item .actions {
+    display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;
+  }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 10px; font-weight: 600; margin-left: 6px;
+  }
+  .badge.lunas { background: #d4edda; color: #155724; }
+  .badge.kredit { background: #fff3cd; color: #856404; }
+  
+  .empty {
+    text-align: center; padding: 30px 20px; color: #999;
+    font-size: 13px;
+  }
+  
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: none; align-items: center; justify-content: center;
+    z-index: 200; padding: 16px;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: white; border-radius: 12px; padding: 16px;
+    width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto;
+  }
+  .modal h3 { margin-bottom: 12px; font-size: 16px; }
+  
+  .progress-bar {
+    height: 6px; background: #eee; border-radius: 3px;
+    overflow: hidden; margin: 6px 0;
+  }
+  .progress-bar > div {
+    height: 100%; background: linear-gradient(90deg, #289672, #4cbf91);
+  }
+  
+  /* LOGIN SCREEN */
+  .auth-screen {
+    min-height: 100vh; display: flex; align-items: center;
+    justify-content: center; padding: 20px;
+    background: linear-gradient(135deg, #1e6f5c, #289672);
+  }
+  .auth-card {
+    background: white; border-radius: 16px; padding: 24px;
+    width: 100%; max-width: 380px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  }
+  .auth-card h2 {
+    text-align: center; margin-bottom: 4px; color: #1e6f5c;
+    font-size: 22px;
+  }
+  .auth-card p.sub {
+    text-align: center; color: #888; font-size: 13px;
+    margin-bottom: 20px;
+  }
+  .auth-tabs {
+    display: flex; gap: 4px; margin-bottom: 16px; background: #eee;
+    padding: 3px; border-radius: 8px;
+  }
+  .auth-tabs button {
+    flex: 1; padding: 8px; border: none; background: transparent;
+    border-radius: 6px; font-size: 13px; font-weight: 600;
+    cursor: pointer; color: #666;
+  }
+  .auth-tabs button.active { background: white; color: #289672; }
+  .auth-msg {
+    padding: 8px 12px; border-radius: 8px; font-size: 12px;
+    margin-bottom: 10px;
+  }
+  .auth-msg.err { background: #f8d7da; color: #721c24; }
+  .auth-msg.ok { background: #d4edda; color: #155724; }
+  
+  .loading {
+    text-align: center; padding: 40px 20px; color: #666;
+  }
+  .spinner {
+    display: inline-block; width: 32px; height: 32px;
+    border: 3px solid #eee; border-top-color: #289672;
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    margin-bottom: 10px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+/* ============================================
+   KONFIGURASI SUPABASE
+   GANTI DENGAN MILIKMU!
+   ============================================ */
+const SUPABASE_URL = 'https://dcjbarfqbvaoagduoemw.supabase.co/rest/v1/';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjamJhcmZxYnZhb2FnZHVvZW13Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyOTA2MTgsImV4cCI6MjEwNjg2NjYxOH0.vAFO7gXlfoxQxT31268jNwvI4BO8QfSsFAB3SeBW3fo';
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ============================================
+   STATE
+   ============================================ */
+let session = null;
+let user = null;
+let state = {
+  kawasan: [],
+  konsumen: [],
+  pembayaran: [],
+  pengeluaran: [],
+};
+let activeKawasan = null;
+let activeView = 'dashboard';
+let loading = false;
+
+/* ============================================
+   HELPERS
+   ============================================ */
+const fmtRp = n => 'Rp ' + (n||0).toLocaleString('id-ID');
+const fmtTgl = s => {
+  if (!s) return '-';
+  const d = new Date(s);
+  return d.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
+};
+const escapeHtml = s => String(s||'').replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+
+function getKawasan(id) { return state.kawasan.find(k => k.id === id); }
+function konsumenByKawasan(kid) { return state.konsumen.filter(k => k.kawasan_id === kid); }
+function pembayaranByKonsumen(kid) { return state.pembayaran.filter(p => p.konsumen_id === kid); }
+function totalBayarKonsumen(kid) {
+  return pembayaranByKonsumen(kid).reduce((s,p) => s + (+p.jumlah||0), 0);
+}
+function sisaKonsumen(k) {
+  const total = (+k.harga || 0);
+  const bayar = totalBayarKonsumen(k.id);
+  return Math.max(0, total - bayar);
+}
+function statusKonsumen(k) {
+  return sisaKonsumen(k) <= 0 ? 'lunas' : 'kredit';
+}
+
+/* ============================================
+   AUTH SCREEN
+   ============================================ */
+function renderAuthScreen() {
+  document.getElementById('app').innerHTML = `
+    <div class="auth-screen">
+      <div class="auth-card">
+        <h2>🏘️ Kavling App</h2>
+        <p class="sub">Pencatatan Tanah Kavling</p>
+        <div class="auth-tabs">
+          <button id="tabLogin" class="active" onclick="switchAuthTab('login')">Masuk</button>
+          <button id="tabRegister" onclick="switchAuthTab('register')">Daftar</button>
+        </div>
+        <div id="authMsg"></div>
+        <div id="loginForm">
+          <div class="form-group">
+            <label>Email</label>
+            <input id="loginEmail" type="email" placeholder="email@contoh.com" autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password">
+          </div>
+          <button class="primary" id="btnLogin" onclick="doLogin()">Masuk</button>
+          <div style="text-align:center;margin-top:12px">
+            <a href="#" onclick="doForgotPassword();return false" style="color:#289672;font-size:12px">
+              Lupa password?
+            </a>
+          </div>
+        </div>
+        <div id="registerForm" style="display:none">
+          <div class="form-group">
+            <label>Email</label>
+            <input id="regEmail" type="email" placeholder="email@contoh.com" autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label>Password (min. 6 karakter)</label>
+            <input id="regPass" type="password" placeholder="••••••••" autocomplete="new-password">
+          </div>
+          <div class="form-group">
+            <label>Konfirmasi Password</label>
+            <input id="regPass2" type="password" placeholder="••••••••" autocomplete="new-password">
+          </div>
+          <button class="primary" id="btnRegister" onclick="doRegister()">Daftar</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function switchAuthTab(tab) {
+  document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
+  document.getElementById('tabRegister').classList.toggle('active', tab === 'register');
+  document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
+  document.getElementById('authMsg').innerHTML = '';
+}
+
+function showAuthMsg(msg, type = 'err') {
+  document.getElementById('authMsg').innerHTML =
+    `<div class="auth-msg ${type}">${escapeHtml(msg)}</div>`;
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  if (!email || !pass) return showAuthMsg('Email & password wajib diisi');
+  const btn = document.getElementById('btnLogin');
+  btn.disabled = true; btn.textContent = 'Memproses...';
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  btn.disabled = false; btn.textContent = 'Masuk';
+  if (error) showAuthMsg(error.message);
+}
+
+async function doRegister() {
+  const email = document.getElementById('regEmail').value.trim();
+  const pass = document.getElementById('regPass').value;
+  const pass2 = document.getElementById('regPass2').value;
+  if (!email || !pass) return showAuthMsg('Email & password wajib diisi');
+  if (pass.length < 6) return showAuthMsg('Password minimal 6 karakter');
+  if (pass !== pass2) return showAuthMsg('Konfirmasi password tidak cocok');
+  const btn = document.getElementById('btnRegister');
+  btn.disabled = true; btn.textContent = 'Memproses...';
+  const { data, error } = await sb.auth.signUp({ email, password: pass });
+  btn.disabled = false; btn.textContent = 'Daftar';
+  if (error) return showAuthMsg(error.message);
+  if (data.user && !data.session) {
+    showAuthMsg('Berhasil daftar! Cek email untuk verifikasi, lalu login.', 'ok');
+    switchAuthTab('login');
+  } else {
+    showAuthMsg('Berhasil daftar & login otomatis!', 'ok');
+  }
+}
+
+async function doForgotPassword() {
+  const email = document.getElementById('loginEmail').value.trim();
+  if (!email) return showAuthMsg('Isi email dulu, baru klik lupa password');
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + window.location.pathname
+  });
+  if (error) return showAuthMsg(error.message);
+  showAuthMsg('Link reset password sudah dikirim ke email kamu.', 'ok');
+}
+
+async function doLogout() {
+  if (!confirm('Yakin mau logout?')) return;
+  await sb.auth.signOut();
+}
+
+/* ============================================
+   GANTI PASSWORD
+   ============================================ */
+function openGantiPasswordModal() {
+  openModal(`
+    <h3>🔒 Ganti Password</h3>
+    <div class="form-group">
+      <label>Password Baru (min. 6 karakter)</label>
+      <input id="np1" type="password" placeholder="••••••••">
+    </div>
+    <div class="form-group">
+      <label>Konfirmasi Password Baru</label>
+      <input id="np2" type="password" placeholder="••••••••">
+    </div>
+    <button class="primary" onclick="simpanGantiPassword()">Simpan Password Baru</button>
+    <button class="primary secondary" onclick="closeModal()" style="margin-top:6px">Batal</button>
+  `);
+}
+
+async function simpanGantiPassword() {
+  const p1 = document.getElementById('np1').value;
+  const p2 = document.getElementById('np2').value;
+  if (p1.length < 6) return alert('Password minimal 6 karakter');
+  if (p1 !== p2) return alert('Konfirmasi password tidak cocok');
+  const { error } = await sb.auth.updateUser({ password: p1 });
+  if (error) return alert('Gagal: ' + error.message);
+  alert('✅ Password berhasil diganti!');
+  closeModal();
+}
+
+/* ============================================
+   LOAD DATA DARI SUPABASE
+   ============================================ */
+async function loadAllData() {
+  loading = true;
+  renderMain();
+  try {
+    const [kRes, koRes, pRes, eRes] = await Promise.all([
+      sb.from('kavling_kawasan').select('*').order('urutan'),
+      sb.from('kavling_konsumen').select('*').order('created_at', { ascending: false }),
+      sb.from('kavling_pembayaran').select('*').order('tanggal', { ascending: false }),
+      sb.from('kavling_pengeluaran').select('*').order('tanggal', { ascending: false }),
+    ]);
+    if (kRes.error) throw kRes.error;
+    if (koRes.error) throw koRes.error;
+    if (pRes.error) throw pRes.error;
+    if (eRes.error) throw eRes.error;
+    state.kawasan = kRes.data || [];
+    state.konsumen = koRes.data || [];
+    state.pembayaran = pRes.data || [];
+    state.pengeluaran = eRes.data || [];
+    if (state.kawasan.length > 0) {
+      if (!activeKawasan || !state.kawasan.find(k => k.id === activeKawasan)) {
+        activeKawasan = state.kawasan[0].id;
+      }
+    }
+    loading = false;
+    renderMain();
+  } catch (err) {
+    loading = false;
+    document.getElementById('app').innerHTML = `
+      <div class="container" style="padding-top:40px">
+        <div class="card">
+          <h3>❌ Gagal Memuat Data</h3>
+          <p style="color:#d9534f;margin-bottom:12px">${escapeHtml(err.message)}</p>
+          <button class="primary" onclick="loadAllData()">🔄 Coba Lagi</button>
+          <button class="primary danger" onclick="doLogout()" style="margin-top:6px">Logout</button>
+        </div>
+      </div>
+    `;
+  }
+}
+
+/* ============================================
+   RENDER MAIN APP
+   ============================================ */
+function renderMain() {
+  if (loading) {
+    document.getElementById('app').innerHTML = `
+      <div class="loading">
+        <div class="spinner"></div>
+        <div>Memuat data...</div>
+      </div>
+    `;
+    return;
+  }
+  document.getElementById('app').innerHTML = `
+    <header>
+      <div class="top-row">
+        <div>
+          <h1>🏘️ Pencatatan Tanah Kavling</h1>
+          <p id="headerSub"></p>
+        </div>
+        <button class="logout-btn" onclick="openUserMenu()">👤 Akun</button>
+      </div>
+    </header>
+    <div class="container">
+      <div class="kawasan-tabs" id="kawasanTabs"></div>
+      <div class="nav-menu" id="navMenu">
+        <button data-view="dashboard" class="${activeView==='dashboard'?'active':''}" onclick="setView('dashboard')"><span class="ico">📊</span>Dashboard</button>
+        <button data-view="konsumen" class="${activeView==='konsumen'?'active':''}" onclick="setView('konsumen')"><span class="ico">👥</span>Konsumen</button>
+        <button data-view="pembayaran" class="${activeView==='pembayaran'?'active':''}" onclick="setView('pembayaran')"><span class="ico">💰</span>Pembayaran</button>
+        <button data-view="pengeluaran" class="${activeView==='pengeluaran'?'active':''}" onclick="setView('pengeluaran')"><span class="ico">📤</span>Pengeluaran</button>
+      </div>
+      <div id="content"></div>
+    </div>
+  `;
+  renderKawasanTabs();
+  renderContent();
+  updateHeaderSub();
+}
+
+function updateHeaderSub() {
+  const el = document.getElementById('headerSub');
+  if (!el) return;
+  const k = getKawasan(activeKawasan);
+  el.textContent = k ? `Kawasan: ${k.nama}` : 'Belum ada kawasan';
+}
+
+function renderKawasanTabs() {
+  const el = document.getElementById('kawasanTabs');
+  if (!el) return;
+  el.innerHTML = state.kawasan.map(k => `
+    <button class="${k.id === activeKawasan ? 'active':''}"
+      onclick="switchKawasan('${k.id}')">${escapeHtml(k.nama)}</button>
+  `).join('');
+}
+
+function switchKawasan(id) {
+  activeKawasan = id;
+  renderMain();
+}
+
+function setView(v) {
+  activeView = v;
+  document.querySelectorAll('#navMenu button').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === v);
+  });
+  renderContent();
+}
+
+function renderContent() {
+  const el = document.getElementById('content');
+  if (!el) return;
+  if (activeView === 'dashboard') el.innerHTML = viewDashboard();
+  else if (activeView === 'konsumen') el.innerHTML = viewKonsumen();
+  else if (activeView === 'pembayaran') el.innerHTML = viewPembayaran();
+  else if (activeView === 'pengeluaran') el.innerHTML = viewPengeluaran();
+}
+
+/* ============================================
+   VIEW: DASHBOARD
+   ============================================ */
+function viewDashboard() {
+  const kid = activeKawasan;
+  const kons = konsumenByKawasan(kid);
+  const totalNilai = kons.reduce((s,k) => s + (+k.harga||0), 0);
+  const totalMasuk = state.pembayaran.filter(p => p.kawasan_id===kid)
+                        .reduce((s,p) => s + (+p.jumlah||0), 0);
+  const totalKeluar = state.pengeluaran.filter(p => p.kawasan_id===kid)
+                        .reduce((s,p) => s + (+p.jumlah||0), 0);
+  const totalSisa = Math.max(0, totalNilai - totalMasuk);
+  const saldo = totalMasuk - totalKeluar;
+  const now = new Date();
+  const bulanIni = state.pengeluaran.filter(p => {
+    if (p.kawasan_id !== kid) return false;
+    const d = new Date(p.tanggal);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).reduce((s,p) => s + (+p.jumlah||0), 0);
+  const belumLunas = kons.filter(k => statusKonsumen(k) === 'kredit');
+  const k = getKawasan(kid);
+
+  return `
+    <div class="stat-grid">
+      <div class="stat"><div class="label">Total Konsumen</div>
+        <div class="value">${kons.length} orang</div></div>
+      <div class="stat"><div class="label">Belum Lunas</div>
+        <div class="value" style="color:#f0ad4e">${belumLunas.length} orang</div></div>
+      <div class="stat"><div class="label">Total Nilai Kavling</div>
+        <div class="value blue">${fmtRp(totalNilai)}</div></div>
+      <div class="stat"><div class="label">Sisa Piutang</div>
+        <div class="value red">${fmtRp(totalSisa)}</div></div>
+      <div class="stat"><div class="label">Total Uang Masuk</div>
+        <div class="value">${fmtRp(totalMasuk)}</div></div>
+      <div class="stat"><div class="label">Total Pengeluaran</div>
+        <div class="value red">${fmtRp(totalKeluar)}</div></div>
+      <div class="stat"><div class="label">Saldo Kas</div>
+        <div class="value" style="color:${saldo>=0?'#289672':'#d9534f'}">${fmtRp(saldo)}</div></div>
+      <div class="stat"><div class="label">Pengeluaran Bulan Ini</div>
+        <div class="value red">${fmtRp(bulanIni)}</div></div>
+    </div>
+    
+    <div class="card">
+      <h3>⚙️ Ubah Nama Kawasan</h3>
+      <div class="form-group">
+        <input id="editNamaKawasan" value="${escapeHtml(k?.nama || '')}">
+      </div>
+      <button class="primary" onclick="updateNamaKawasan()">Simpan Nama</button>
+    </div>
+
+    <div class="card">
+      <h3>📥 Export Data</h3>
+      <p style="font-size:12px;color:#666;margin-bottom:10px">
+        Download semua data kawasan ini sebagai JSON (untuk backup manual).
+      </p>
+      <button class="primary secondary" onclick="exportData()">Export JSON</button>
+    </div>
+  `;
+}
+
+async function updateNamaKawasan() {
+  const v = document.getElementById('editNamaKawasan').value.trim();
+  if (!v) return alert('Nama tidak boleh kosong');
+  const { error } = await sb.from('kavling_kawasan').update({ nama: v }).eq('id', activeKawasan);
+  if (error) return alert('Gagal: ' + error.message);
+  const k = getKawasan(activeKawasan);
+  if (k) k.nama = v;
+  renderKawasanTabs();
+  updateHeaderSub();
+  alert('✅ Nama kawasan diperbarui');
+}
+
+function exportData() {
+  const kid = activeKawasan;
+  const k = getKawasan(kid);
+  const data = {
+    exported_at: new Date().toISOString(),
+    kawasan: k,
+    konsumen: state.konsumen.filter(x => x.kawasan_id === kid),
+    pembayaran: state.pembayaran.filter(x => x.kawasan_id === kid),
+    pengeluaran: state.pengeluaran.filter(x => x.kawasan_id === kid),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `kavling-${k.nama.replace(/\s+/g,'_')}-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ============================================
+   VIEW: KONSUMEN
+   ============================================ */
+function viewKonsumen() {
+  const kons = konsumenByKawasan(activeKawasan);
+  const list = kons.length === 0
+    ? `<div class="empty">Belum ada konsumen di kawasan ini.</div>`
+    : kons.map(k => {
+        const bayar = totalBayarKonsumen(k.id);
+        const sisa = sisaKonsumen(k);
+        const persen = k.harga > 0 ? Math.min(100, (bayar/k.harga)*100) : 0;
+        const st = statusKonsumen(k);
+        return `
+          <div class="list-item">
+            <div class="row1">
+              <div class="title">${escapeHtml(k.nama)}
+                <span class="badge ${st}">${st.toUpperCase()}</span>
+              </div>
+              <div class="amount">${fmtRp(k.harga)}</div>
+            </div>
+            <div class="meta">
+              Blok: <b>${escapeHtml(k.blok||'-')}</b> · Luas: <b>${k.luas||'-'} m²</b><br>
+              DP: ${fmtRp(k.dp)} · Cicilan: ${fmtRp(k.cicilan_per_bulan)} x ${k.tenor} bln<br>
+              Mulai: ${fmtTgl(k.tgl_mulai)} · Telp: ${escapeHtml(k.telp||'-')}
+            </div>
+            <div class="progress-bar"><div style="width:${persen}%"></div></div>
+            <div class="meta">
+              Terbayar: <b>${fmtRp(bayar)}</b> (${persen.toFixed(1)}%) ·
+              Sisa: <b style="color:${sisa>0?'#d9534f':'#289672'}">${fmtRp(sisa)}</b>
+            </div>
+            <div class="actions">
+              <button class="primary small" onclick="openBayarModal('${k.id}')">💵 Bayar</button>
+              <button class="primary small secondary" onclick="openRiwayatModal('${k.id}')">📋 Riwayat</button>
+              <button class="primary small secondary" onclick="openEditKonsumenModal('${k.id}')">✏️ Edit</button>
+              <button class="primary small danger" onclick="hapusKonsumen('${k.id}')">🗑️</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+  return `
+    <button class="primary" onclick="openKonsumenModal()" style="margin-bottom:10px">+ Tambah Konsumen</button>
+    ${list}
+  `;
+}
+
+function openKonsumenModal() {
+  openModal(`
+    <h3>Tambah Konsumen</h3>
+    <div class="form-group"><label>Nama Konsumen</label>
+      <input id="f_nama" placeholder="Nama lengkap"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Blok/Kavling</label>
+        <input id="f_blok" placeholder="A-01"></div>
+      <div class="form-group"><label>Luas (m²)</label>
+        <input id="f_luas" type="number" placeholder="120"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Harga Total (Rp)</label>
+        <input id="f_harga" type="number" placeholder="150000000"></div>
+      <div class="form-group"><label>DP (Rp)</label>
+        <input id="f_dp" type="number" placeholder="30000000"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Cicilan / Bulan (Rp)</label>
+        <input id="f_cicilan" type="number" placeholder="2500000"></div>
+      <div class="form-group"><label>Tenor (bulan)</label>
+        <input id="f_tenor" type="number" placeholder="48"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Tanggal Mulai</label>
+        <input id="f_tgl" type="date"></div>
+      <div class="form-group"><label>No. Telp</label>
+        <input id="f_telp" placeholder="08xx"></div>
+    </div>
+    <div class="form-group"><label>Catatan</label>
+      <textarea id="f_catatan" rows="2"></textarea></div>
+    <button class="primary" id="btnSaveKonsumen" onclick="simpanKonsumen()">Simpan</button>
+    <button class="primary secondary" onclick="closeModal()" style="margin-top:6px">Batal</button>
+  `);
+  document.getElementById('f_tgl').value = new Date().toISOString().slice(0,10);
+}
+
+async function simpanKonsumen() {
+  const nama = document.getElementById('f_nama').value.trim();
+  if (!nama) return alert('Nama wajib diisi');
+  const btn = document.getElementById('btnSaveKonsumen');
+  btn.disabled = true; btn.textContent = 'Menyimpan...';
+  const data = {
+    user_id: user.id,
+    kawasan_id: activeKawasan,
+    nama,
+    blok: document.getElementById('f_blok').value.trim(),
+    luas: +document.getElementById('f_luas').value || 0,
+    harga: +document.getElementById('f_harga').value || 0,
+    dp: +document.getElementById('f_dp').value || 0,
+    cicilan_per_bulan: +document.getElementById('f_cicilan').value || 0,
+    tenor: +document.getElementById('f_tenor').value || 0,
+    tgl_mulai: document.getElementById('f_tgl').value || null,
+    telp: document.getElementById('f_telp').value.trim(),
+    catatan: document.getElementById('f_catatan').value.trim(),
+  };
+  const { data: inserted, error } = await sb.from('kavling_konsumen').insert(data).select().single();
+  if (error) { btn.disabled = false; btn.textContent = 'Simpan'; return alert('Gagal: ' + error.message); }
+  state.konsumen.unshift(inserted);
+  // Auto catat DP sebagai pembayaran
+  if (data.dp > 0) {
+    const bayarData = {
+      user_id: user.id,
+      kawasan_id: activeKawasan,
+      konsumen_id: inserted.id,
+      tanggal: data.tgl_mulai || new Date().toISOString().slice(0,10),
+      jumlah: data.dp,
+      keterangan: 'DP awal',
+    };
+    const { data: insBayar } = await sb.from('kavling_pembayaran').insert(bayarData).select().single();
+    if (insBayar) state.pembayaran.unshift(insBayar);
+  }
+  closeModal();
+  renderContent();
+}
+
+function openEditKonsumenModal(id) {
+  const k = state.konsumen.find(x => x.id === id);
+  if (!k) return;
+  openModal(`
+    <h3>Edit Konsumen</h3>
+    <div class="form-group"><label>Nama Konsumen</label>
+      <input id="f_nama" value="${escapeHtml(k.nama)}"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Blok/Kavling</label>
+        <input id="f_blok" value="${escapeHtml(k.blok||'')}"></div>
+      <div class="form-group"><label>Luas (m²)</label>
+        <input id="f_luas" type="number" value="${k.luas||0}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Harga Total (Rp)</label>
+        <input id="f_harga" type="number" value="${k.harga||0}"></div>
+      <div class="form-group"><label>DP (Rp)</label>
+        <input id="f_dp" type="number" value="${k.dp||0}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Cicilan / Bulan</label>
+        <input id="f_cicilan" type="number" value="${k.cicilan_per_bulan||0}"></div>
+      <div class="form-group"><label>Tenor (bulan)</label>
+        <input id="f_tenor" type="number" value="${k.tenor||0}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Tanggal Mulai</label>
+        <input id="f_tgl" type="date" value="${k.tgl_mulai||''}"></div>
+      <div class="form-group"><label>No. Telp</label>
+        <input id="f_telp" value="${escapeHtml(k.telp||'')}"></div>
+    </div>
+    <div class="form-group"><label>Catatan</label>
+      <textarea id="f_catatan" rows="2">${escapeHtml(k.catatan||'')}</textarea></div>
+    <button class="primary" id="btnEditKonsumen" onclick="updateKonsumen('${id}')">Simpan Perubahan</button>
+    <button class="primary secondary" onclick="closeModal()" style="margin-top:6px">Batal</button>
+  `);
+}
+
+async function updateKonsumen(id) {
+  const btn = document.getElementById('btnEditKonsumen');
+  btn.disabled = true; btn.textContent = 'Menyimpan...';
+  const updates = {
+    nama: document.getElementById('f_nama').value.trim(),
+    blok: document.getElementById('f_blok').value.trim(),
+    luas: +document.getElementById('f_luas').value || 0,
+    harga: +document.getElementById('f_harga').value || 0,
+    dp: +document.getElementById('f_dp').value || 0,
+    cicilan_per_bulan: +document.getElementById('f_cicilan').value || 0,
+    tenor: +document.getElementById('f_tenor').value || 0,
+    tgl_mulai: document.getElementById('f_tgl').value || null,
+    telp: document.getElementById('f_telp').value.trim(),
+    catatan: document.getElementById('f_catatan').value.trim(),
+  };
+  const { error } = await sb.from('kavling_konsumen').update(updates).eq('id', id);
+  if (error) { btn.disabled = false; btn.textContent = 'Simpan Perubahan'; return alert('Gagal: ' + error.message); }
+  const k = state.konsumen.find(x => x.id === id);
+  Object.assign(k, updates);
+  closeModal();
+  renderContent();
+}
+
+async function hapusKonsumen(id) {
+  if (!confirm('Hapus konsumen ini beserta semua riwayat pembayarannya?')) return;
+  const { error } = await sb.from('kavling_konsumen').delete().eq('id', id);
+  if (error) return alert('Gagal: ' + error.message);
+  state.konsumen = state.konsumen.filter(x => x.id !== id);
+  state.pembayaran = state.pembayaran.filter(p => p.konsumen_id !== id);
+  renderContent();
+}
+
+/* ============================================
+   VIEW: PEMBAYARAN
+   ============================================ */
+function viewPembayaran() {
+  const bayar = state.pembayaran
+    .filter(p => p.kawasan_id === activeKawasan)
+    .sort((a,b) => new Date(b.tanggal) - new Date(a.tanggal));
+  const total = bayar.reduce((s,p) => s + (+p.jumlah||0), 0);
+  const list = bayar.length === 0
+    ? `<div class="empty">Belum ada pembayaran.</div>`
+    : bayar.map(p => {
+        const k = state.konsumen.find(x => x.id === p.konsumen_id);
+        return `
+          <div class="list-item">
+            <div class="row1">
+              <div class="title">${escapeHtml(k?.nama || '(konsumen dihapus)')}</div>
+              <div class="amount">+${fmtRp(p.jumlah)}</div>
+            </div>
+            <div class="meta">${fmtTgl(p.tanggal)} · ${escapeHtml(p.keterangan||'-')}</div>
+            <div class="actions">
+              <button class="primary small danger" onclick="hapusPembayaran('${p.id}')">🗑️ Hapus</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+  return `
+    <div class="card">
+      <h3>💰 Total Pemasukan Kawasan Ini</h3>
+      <div style="font-size:20px;font-weight:700;color:#289672">${fmtRp(total)}</div>
+    </div>
+    <button class="primary" onclick="openBayarModal()" style="margin-bottom:10px">+ Tambah Pembayaran</button>
+    ${list}
+  `;
+}
+
+function openBayarModal(konsumenId) {
+  const kons = konsumenByKawasan(activeKawasan);
+  if (kons.length === 0) return alert('Belum ada konsumen.');
+  const defaultKons = konsumenId || kons[0].id;
+  const options = kons.map(k =>
+    `<option value="${k.id}" ${k.id===defaultKons?'selected':''}>${escapeHtml(k.nama)} - ${escapeHtml(k.blok||'')} (sisa: ${fmtRp(sisaKonsumen(k))})</option>`
+  ).join('');
+  openModal(`
+    <h3>Tambah Pembayaran</h3>
+    <div class="form-group"><label>Konsumen</label>
+      <select id="p_konsumen">${options}</select></div>
+    <div class="form-row">
+      <div class="form-group"><label>Tanggal</label>
+        <input id="p_tgl" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="form-group"><label>Jumlah (Rp)</label>
+        <input id="p_jumlah" type="number" placeholder="2500000"></div>
+    </div>
+    <div class="form-group"><label>Keterangan</label>
+      <input id="p_ket" placeholder="Cicilan ke-1 / DP / dll"></div>
+    <button class="primary" id="btnSaveBayar" onclick="simpanPembayaran()">Simpan</button>
+    <button class="primary secondary" onclick="closeModal()" style="margin-top:6px">Batal</button>
+  `);
+}
+
+async function simpanPembayaran() {
+  const konsumenId = document.getElementById('p_konsumen').value;
+  const jumlah = +document.getElementById('p_jumlah').value || 0;
+  if (jumlah <= 0) return alert('Jumlah harus > 0');
+  const btn = document.getElementById('btnSaveBayar');
+  btn.disabled = true; btn.textContent = 'Menyimpan...';
+  const data = {
+    user_id: user.id,
+    kawasan_id: activeKawasan,
+    konsumen_id: konsumenId,
+    tanggal: document.getElementById('p_tgl').value,
+    jumlah,
+    keterangan: document.getElementById('p_ket').value.trim(),
+  };
+  const { data: inserted, error } = await sb.from('kavling_pembayaran').insert(data).select().single();
+  if (error) { btn.disabled = false; btn.textContent = 'Simpan'; return alert('Gagal: ' + error.message); }
+  state.pembayaran.unshift(inserted);
+  closeModal();
+  renderContent();
+}
+
+async function hapusPembayaran(id) {
+  if (!confirm('Hapus pembayaran ini?')) return;
+  const { error } = await sb.from('kavling_pembayaran').delete().eq('id', id);
+  if (error) return alert('Gagal: ' + error.message);
+  state.pembayaran = state.pembayaran.filter(p => p.id !== id);
+  renderContent();
+}
+
+function openRiwayatModal(konsumenId) {
+  const k = state.konsumen.find(x => x.id === konsumenId);
+  const list = pembayaranByKonsumen(konsumenId)
+    .sort((a,b) => new Date(a.tanggal) - new Date(b.tanggal));
+  const total = list.reduce((s,p) => s + (+p.jumlah||0), 0);
+  const sisa = sisaKonsumen(k);
+  openModal(`
+    <h3>Riwayat: ${escapeHtml(k.nama)}</h3>
+    <div class="meta" style="margin-bottom:8px;font-size:12px;color:#666">
+      Harga: <b>${fmtRp(k.harga)}</b><br>
+      Terbayar: <b style="color:#289672">${fmtRp(total)}</b><br>
+      Sisa: <b style="color:${sisa>0?'#d9534f':'#289672'}">${fmtRp(sisa)}</b>
+    </div>
+    ${list.length === 0 ? '<div class="empty">Belum ada pembayaran.</div>' :
+      list.map((p,i) => `
+        <div style="padding:8px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:600">#${i+1} · ${fmtRp(p.jumlah)}</div>
+            <div style="font-size:11px;color:#888">${fmtTgl(p.tanggal)} · ${escapeHtml(p.keterangan||'-')}</div>
+          </div>
+          <button class="primary small danger" onclick="hapusPembayaran('${p.id}');closeModal()">🗑️</button>
+        </div>
+      `).join('')
+    }
+    <button class="primary secondary" onclick="closeModal()" style="margin-top:12px">Tutup</button>
+  `);
+}
+
+/* ============================================
+   VIEW: PENGELUARAN
+   ============================================ */
+function viewPengeluaran() {
+  const exp = state.pengeluaran
+    .filter(p => p.kawasan_id === activeKawasan)
+    .sort((a,b) => new Date(b.tanggal) - new Date(a.tanggal));
+  const total = exp.reduce((s,p) => s + (+p.jumlah||0), 0);
+  const list = exp.length === 0
+    ? `<div class="empty">Belum ada pengeluaran.</div>`
+    : exp.map(p => `
+        <div class="list-item expense">
+          <div class="row1">
+            <div class="title">${escapeHtml(p.kategori)}</div>
+            <div class="amount">-${fmtRp(p.jumlah)}</div>
+          </div>
+          <div class="meta">${fmtTgl(p.tanggal)} · ${escapeHtml(p.keterangan||'-')}</div>
+          <div class="actions">
+            <button class="primary small danger" onclick="hapusPengeluaran('${p.id}')">🗑️ Hapus</button>
+          </div>
+        </div>
+      `).join('');
+  return `
+    <div class="card">
+      <h3>📤 Total Pengeluaran Kawasan Ini</h3>
+      <div style="font-size:20px;font-weight:700;color:#d9534f">${fmtRp(total)}</div>
+    </div>
+    <button class="primary" onclick="openPengeluaranModal()" style="margin-bottom:10px">+ Tambah Pengeluaran</button>
+    ${list}
+  `;
+}
+
+function openPengeluaranModal() {
+  const kategori = ['Pembelian Tanah','Sertifikat/AJB','Pematangan Lahan','Pagar & Jalan','Listrik/Air','Gaji Karyawan','Marketing','Lain-lain'];
+  openModal(`
+    <h3>Tambah Pengeluaran</h3>
+    <div class="form-row">
+      <div class="form-group"><label>Tanggal</label>
+        <input id="e_tgl" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="form-group"><label>Jumlah (Rp)</label>
+        <input id="e_jumlah" type="number" placeholder="1000000"></div>
+    </div>
+    <div class="form-group"><label>Kategori</label>
+      <select id="e_kategori">${kategori.map(k=>`<option>${k}</option>`).join('')}</select></div>
+    <div class="form-group"><label>Keterangan</label>
+      <textarea id="e_ket" rows="2" placeholder="Detail pengeluaran..."></textarea></div>
+    <button class="primary" id="btnSaveExp" onclick="simpanPengeluaran()">Simpan</button>
+    <button class="primary secondary" onclick="closeModal()" style="margin-top:6px">Batal</button>
+  `);
+}
+
+async function simpanPengeluaran() {
+  const jumlah = +document.getElementById('e_jumlah').value || 0;
+  if (jumlah <= 0) return alert('Jumlah harus > 0');
+  const btn = document.getElementById('btnSaveExp');
+  btn.disabled = true; btn.textContent = 'Menyimpan...';
+  const data = {
+    user_id: user.id,
+    kawasan_id: activeKawasan,
+    tanggal: document.getElementById('e_tgl').value,
+    kategori: document.getElementById('e_kategori').value,
+    jumlah,
+    keterangan: document.getElementById('e_ket').value.trim(),
+  };
+  const { data: inserted, error } = await sb.from('kavling_pengeluaran').insert(data).select().single();
+  if (error) { btn.disabled = false; btn.textContent = 'Simpan'; return alert('Gagal: ' + error.message); }
+  state.pengeluaran.unshift(inserted);
+  closeModal();
+  renderContent();
+}
+
+async function hapusPengeluaran(id) {
+  if (!confirm('Hapus pengeluaran ini?')) return;
+  const { error } = await sb.from('kavling_pengeluaran').delete().eq('id', id);
+  if (error) return alert('Gagal: ' + error.message);
+  state.pengeluaran = state.pengeluaran.filter(p => p.id !== id);
+  renderContent();
+}
+
+/* ============================================
+   MODAL UMUM
+   ============================================ */
+function openModal(html) {
+  let modalBg = document.getElementById('modalBg');
+  if (!modalBg) {
+    modalBg = document.createElement('div');
+    modalBg.id = 'modalBg';
+    modalBg.className = 'modal-bg';
+    modalBg.innerHTML = '<div class="modal" id="modalContent"></div>';
+    document.body.appendChild(modalBg);
+    modalBg.addEventListener('click', e => {
+      if (e.target.id === 'modalBg') closeModal();
+    });
+  }
+  document.getElementById('modalContent').innerHTML = html;
+  modalBg.classList.add('show');
+}
+function closeModal() {
+  const modalBg = document.getElementById('modalBg');
+  if (modalBg) modalBg.classList.remove('show');
+}
+
+/* ============================================
+   USER MENU (Akun)
+   ============================================ */
+function openUserMenu() {
+  openModal(`
+    <h3>👤 Akun Saya</h3>
+    <div class="form-group">
+      <label>Email</label>
+      <input value="${escapeHtml(user?.email || '')}" disabled>
+    </div>
+    <button class="primary" onclick="openGantiPasswordModal()" style="margin-bottom:6px">🔒 Ganti Password</button>
+    <button class="primary danger" onclick="closeModal();doLogout()">🚪 Logout</button>
+    <button class="primary secondary" onclick="closeModal()" style="margin-top:6px">Tutup</button>
+  `);
+}
+
+/* ============================================
+   INIT & AUTH LISTENER
+   ============================================ */
+async function init() {
+  const { data: { session: s } } = await sb.auth.getSession();
+  session = s;
+  user = s?.user || null;
+  if (user) {
+    await loadAllData();
+  } else {
+    renderAuthScreen();
+  }
+}
+
+sb.auth.onAuthStateChange(async (event, s) => {
+  session = s;
+  user = s?.user || null;
+  if (event === 'SIGNED_IN' && user) {
+    await loadAllData();
+  } else if (event === 'SIGNED_OUT') {
+    state = { kawasan: [], konsumen: [], pembayaran: [], pengeluaran: [] };
+    activeKawasan = null;
+    activeView = 'dashboard';
+    renderAuthScreen();
+  } else if (event === 'PASSWORD_RECOVERY') {
+    // User klik link reset password di email
+    setTimeout(() => {
+      openModal(`
+        <h3>🔒 Set Password Baru</h3>
+        <div class="form-group">
+          <label>Password Baru</label>
+          <input id="rp1" type="password" placeholder="••••••••">
+        </div>
+        <div class="form-group">
+          <label>Konfirmasi Password</label>
+          <input id="rp2" type="password" placeholder="••••••••">
+        </div>
+        <button class="primary" onclick="simpanResetPassword()">Simpan</button>
+      `);
+    }, 500);
+  }
+});
+
+async function simpanResetPassword() {
+  const p1 = document.getElementById('rp1').value;
+  const p2 = document.getElementById('rp2').value;
+  if (p1.length < 6) return alert('Password minimal 6 karakter');
+  if (p1 !== p2) return alert('Konfirmasi tidak cocok');
+  const { error } = await sb.auth.updateUser({ password: p1 });
+  if (error) return alert('Gagal: ' + error.message);
+  alert('✅ Password berhasil direset!');
+  closeModal();
+}
+
+init();
+</script>
+</body>
+</html>
