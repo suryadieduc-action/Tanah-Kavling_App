@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Manajemen Tanah Kavling</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏘️</text></svg>">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   body {
@@ -151,6 +153,43 @@
     height: 100%; background: linear-gradient(90deg, #289672, #4cbf91);
   }
   
+  /* Search & Filter Bar */
+  .filter-bar {
+    background: white; padding: 12px; border-radius: 12px;
+    margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .filter-bar input {
+    width: 100%; padding: 10px 12px; border: 1.5px solid #ddd;
+    border-radius: 8px; font-size: 14px; font-family: inherit;
+    margin-bottom: 8px;
+  }
+  .filter-bar input:focus { outline: none; border-color: #289672; }
+  .filter-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    margin-bottom: 8px;
+  }
+  .filter-row select {
+    padding: 8px 10px; border: 1.5px solid #ddd; border-radius: 8px;
+    font-size: 13px; background: white; font-family: inherit;
+  }
+  .filter-info {
+    font-size: 12px; color: #666; margin-top: 6px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .filter-info button {
+    background: transparent; border: none; color: #289672;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    text-decoration: underline;
+  }
+  
+  /* Chart container */
+  .chart-wrap {
+    background: white; padding: 12px; border-radius: 12px;
+    margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .chart-wrap h3 { font-size: 14px; margin-bottom: 10px; color: #333; }
+  .chart-container { position: relative; height: 220px; }
+  
   /* LOGIN SCREEN */
   .auth-screen {
     min-height: 100vh; display: flex; align-items: center;
@@ -197,6 +236,53 @@
     margin-bottom: 10px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+  
+  /* ============ PRINT STYLES ============ */
+  @media print {
+    body { background: white; padding: 0; font-size: 12px; }
+    header, .nav-menu, .kawasan-tabs, .filter-bar, .no-print,
+    button, .actions, .modal-bg { display: none !important; }
+    .container { padding: 0; max-width: 100%; }
+    .card { box-shadow: none; border: none; page-break-inside: avoid; }
+    .stat-grid { grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .stat { border: 1px solid #ddd; padding: 6px; }
+    .stat .value { font-size: 12px; }
+    .stat .label { font-size: 9px; }
+    .print-header { display: block !important; text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+    .print-header h1 { font-size: 20px; margin-bottom: 4px; }
+    .print-header p { font-size: 11px; color: #333; }
+    table.print-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
+    table.print-table th, table.print-table td { border: 1px solid #333; padding: 5px 8px; text-align: left; }
+    table.print-table th { background: #f0f0f0; font-weight: 700; }
+    table.print-table td.num { text-align: right; }
+    .print-footer { margin-top: 30px; font-size: 11px; text-align: right; }
+    .print-ttd { margin-top: 60px; display: flex; justify-content: space-between; }
+    .print-ttd > div { text-align: center; }
+    .print-ttd .line { margin-top: 60px; border-top: 1px solid #000; padding-top: 4px; min-width: 180px; }
+    .print-single { display: block !important; }
+    .print-only { display: block !important; }
+  }
+  .print-header, .print-only { display: none; }
+  
+  /* Search icon in input */
+  .search-wrap { position: relative; }
+  .search-wrap::before {
+    content: '🔍'; position: absolute; left: 12px; top: 50%;
+    transform: translateY(-50%); font-size: 14px; pointer-events: none;
+  }
+  .search-wrap input { padding-left: 36px !important; }
+  
+  /* Print action buttons */
+  .print-actions {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    margin-top: 10px;
+  }
+  .print-actions button {
+    padding: 10px; border-radius: 8px; border: none;
+    font-weight: 600; font-size: 12px; cursor: pointer;
+    background: #2a7ae2; color: white;
+  }
+  .print-actions button.alt { background: #6c757d; }
 </style>
 </head>
 <body>
@@ -206,7 +292,6 @@
 <script>
 /* ============================================
    KONFIGURASI SUPABASE
-   GANTI DENGAN MILIKMU!
    ============================================ */
 const SUPABASE_URL = 'https://dcjbarfqbvaoagduoemw.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjamJhcmZxYnZhb2FnZHVvZW13Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyOTA2MTgsImV4cCI6MjEwNjg2NjYxOH0.vAFO7gXlfoxQxT31268jNwvI4BO8QfSsFAB3SeBW3fo';
@@ -228,6 +313,15 @@ let activeKawasan = null;
 let activeView = 'dashboard';
 let loading = false;
 
+// Filter state untuk konsumen
+let filterKonsumen = {
+  q: '',
+  status: 'all',   // all | kredit | lunas
+  sort: 'terbaru', // terbaru | blok | nama | sisa
+};
+
+let chartInstance = null;
+
 /* ============================================
    HELPERS
    ============================================ */
@@ -236,6 +330,11 @@ const fmtTgl = s => {
   if (!s) return '-';
   const d = new Date(s);
   return d.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
+};
+const fmtTglLong = s => {
+  if (!s) return '-';
+  const d = new Date(s);
+  return d.toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' });
 };
 const escapeHtml = s => String(s||'').replace(/[&<>"']/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -255,6 +354,37 @@ function statusKonsumen(k) {
   return sisaKonsumen(k) <= 0 ? 'lunas' : 'kredit';
 }
 
+function getFilteredKonsumen() {
+  let list = konsumenByKawasan(activeKawasan);
+  // Search
+  if (filterKonsumen.q) {
+    const q = filterKonsumen.q.toLowerCase();
+    list = list.filter(k =>
+      (k.nama||'').toLowerCase().includes(q) ||
+      (k.blok||'').toLowerCase().includes(q)
+    );
+  }
+  // Status filter
+  if (filterKonsumen.status === 'kredit') {
+    list = list.filter(k => statusKonsumen(k) === 'kredit');
+  } else if (filterKonsumen.status === 'lunas') {
+    list = list.filter(k => statusKonsumen(k) === 'lunas');
+  }
+  // Sort
+  list = [...list];
+  if (filterKonsumen.sort === 'blok') {
+    list.sort((a,b) => (a.blok||'').localeCompare(b.blok||''));
+  } else if (filterKonsumen.sort === 'nama') {
+    list.sort((a,b) => (a.nama||'').localeCompare(b.nama||''));
+  } else if (filterKonsumen.sort === 'sisa') {
+    list.sort((a,b) => sisaKonsumen(b) - sisaKonsumen(a));
+  } else {
+    // terbaru
+    list.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  }
+  return list;
+}
+
 /* ============================================
    AUTH SCREEN
    ============================================ */
@@ -263,7 +393,7 @@ function renderAuthScreen() {
     <div class="auth-screen">
       <div class="auth-card">
         <h2>🏘️ Kavling App</h2>
-        <p class="sub">Manajemen Tanah Kavling</p>
+        <p class="sub">Pencatatan Tanah Kavling</p>
         <div class="auth-tabs">
           <button id="tabLogin" class="active" onclick="switchAuthTab('login')">Masuk</button>
           <button id="tabRegister" onclick="switchAuthTab('register')">Daftar</button>
@@ -315,7 +445,7 @@ function switchAuthTab(tab) {
 
 function showAuthMsg(msg, type = 'err') {
   const el = document.getElementById('authMsg');
-  if (!el) return; // elemen sudah tidak ada, skip
+  if (!el) return;
   el.innerHTML = `<div class="auth-msg ${type}">${escapeHtml(msg)}</div>`;
 }
 
@@ -339,23 +469,19 @@ async function doRegister() {
   if (pass !== pass2) return showAuthMsg('Konfirmasi password tidak cocok');
   const btn = document.getElementById('btnRegister');
   btn.disabled = true; btn.textContent = 'Memproses...';
-  
   const { data, error } = await sb.auth.signUp({
     email,
     password: pass,
     options: {
-      emailRedirectTo: 'https://suryadieduc-action.github.io/Tanah-Kavling_App/',
+      emailRedirectTo: window.location.origin + window.location.pathname,
       data: { source: 'kavling-app' }
     }
   });
-  
   btn.disabled = false; btn.textContent = 'Daftar';
   if (error) return showAuthMsg(error.message);
   if (data.user && !data.session) {
     showAuthMsg('Berhasil daftar! Cek email untuk verifikasi, lalu login.', 'ok');
     switchAuthTab('login');
-  } else {
-    showAuthMsg('Berhasil daftar!', 'ok');
   }
 }
 
@@ -504,6 +630,8 @@ function renderKawasanTabs() {
 
 function switchKawasan(id) {
   activeKawasan = id;
+  // Reset filter
+  filterKonsumen = { q: '', status: 'all', sort: 'terbaru' };
   renderMain();
 }
 
@@ -518,10 +646,17 @@ function setView(v) {
 function renderContent() {
   const el = document.getElementById('content');
   if (!el) return;
+  // Destroy chart lama kalau ada
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
   if (activeView === 'dashboard') el.innerHTML = viewDashboard();
   else if (activeView === 'konsumen') el.innerHTML = viewKonsumen();
   else if (activeView === 'pembayaran') el.innerHTML = viewPembayaran();
   else if (activeView === 'pengeluaran') el.innerHTML = viewPengeluaran();
+
+  // Kalau dashboard, gambar chart setelah DOM update
+  if (activeView === 'dashboard') {
+    setTimeout(renderChart, 100);
+  }
 }
 
 /* ============================================
@@ -565,7 +700,28 @@ function viewDashboard() {
       <div class="stat"><div class="label">Pengeluaran Bulan Ini</div>
         <div class="value red">${fmtRp(bulanIni)}</div></div>
     </div>
-    
+
+    <div class="chart-wrap">
+      <h3>📈 Pemasukan vs Pengeluaran (6 Bulan Terakhir)</h3>
+      <div class="chart-container">
+        <canvas id="chartBulanan"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🖨️ Cetak Laporan</h3>
+      <div class="print-actions">
+        <button onclick="cetakLaporanKawasan()">🖨️ Laporan Kawasan</button>
+        <button class="alt" onclick="cetakRekapSemuaKawasan()">🖨️ Rekap Semua</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📥 Export / Backup</h3>
+      <button class="primary secondary" onclick="exportKawasanIni()" style="margin-bottom:6px">Export Kawasan Ini (JSON)</button>
+      <button class="primary secondary" onclick="exportSemuaKawasan()">Export SEMUA Kawasan (JSON)</button>
+    </div>
+
     <div class="card">
       <h3>⚙️ Ubah Nama Kawasan</h3>
       <div class="form-group">
@@ -573,15 +729,83 @@ function viewDashboard() {
       </div>
       <button class="primary" onclick="updateNamaKawasan()">Simpan Nama</button>
     </div>
-
-    <div class="card">
-      <h3>📥 Export Data</h3>
-      <p style="font-size:12px;color:#666;margin-bottom:10px">
-        Download semua data kawasan ini sebagai JSON (untuk backup manual).
-      </p>
-      <button class="primary secondary" onclick="exportData()">Export JSON</button>
-    </div>
   `;
+}
+
+/* ============================================
+   CHART: PEMASUKAN VS PENGELUARAN 6 BULAN
+   ============================================ */
+function renderChart() {
+  const canvas = document.getElementById('chartBulanan');
+  if (!canvas) return;
+  const kid = activeKawasan;
+  // Buat 6 bulan terakhir
+  const bulanLabels = [];
+  const dataMasuk = [];
+  const dataKeluar = [];
+  const now = new Date();
+  const namaBulan = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    bulanLabels.push(namaBulan[d.getMonth()] + ' ' + String(d.getFullYear()).slice(-2));
+    const y = d.getFullYear(), m = d.getMonth();
+    const masuk = state.pembayaran
+      .filter(p => p.kawasan_id === kid)
+      .filter(p => { const t = new Date(p.tanggal); return t.getFullYear()===y && t.getMonth()===m; })
+      .reduce((s,p) => s + (+p.jumlah||0), 0);
+    const keluar = state.pengeluaran
+      .filter(p => p.kawasan_id === kid)
+      .filter(p => { const t = new Date(p.tanggal); return t.getFullYear()===y && t.getMonth()===m; })
+      .reduce((s,p) => s + (+p.jumlah||0), 0);
+    dataMasuk.push(masuk);
+    dataKeluar.push(keluar);
+  }
+  chartInstance = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: bulanLabels,
+      datasets: [
+        {
+          label: 'Pemasukan',
+          data: dataMasuk,
+          backgroundColor: '#289672',
+          borderRadius: 6,
+        },
+        {
+          label: 'Pengeluaran',
+          data: dataKeluar,
+          backgroundColor: '#d9534f',
+          borderRadius: 6,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ctx.dataset.label + ': ' + fmtRp(ctx.raw)
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            font: { size: 10 },
+            callback: v => {
+              if (v >= 1000000) return (v/1000000).toFixed(0) + 'jt';
+              if (v >= 1000) return (v/1000).toFixed(0) + 'rb';
+              return v;
+            }
+          }
+        },
+        x: { ticks: { font: { size: 10 } } }
+      }
+    }
+  });
 }
 
 async function updateNamaKawasan() {
@@ -596,33 +820,15 @@ async function updateNamaKawasan() {
   alert('✅ Nama kawasan diperbarui');
 }
 
-function exportData() {
-  const kid = activeKawasan;
-  const k = getKawasan(kid);
-  const data = {
-    exported_at: new Date().toISOString(),
-    kawasan: k,
-    konsumen: state.konsumen.filter(x => x.kawasan_id === kid),
-    pembayaran: state.pembayaran.filter(x => x.kawasan_id === kid),
-    pengeluaran: state.pengeluaran.filter(x => x.kawasan_id === kid),
-  };
-  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `kavling-${k.nama.replace(/\s+/g,'_')}-${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 /* ============================================
-   VIEW: KONSUMEN
+   VIEW: KONSUMEN (dengan search, filter, sort)
    ============================================ */
 function viewKonsumen() {
-  const kons = konsumenByKawasan(activeKawasan);
-  const list = kons.length === 0
-    ? `<div class="empty">Belum ada konsumen di kawasan ini.</div>`
-    : kons.map(k => {
+  const filtered = getFilteredKonsumen();
+  const totalAll = konsumenByKawasan(activeKawasan).length;
+  const list = filtered.length === 0
+    ? `<div class="empty">${totalAll === 0 ? 'Belum ada konsumen di kawasan ini.' : 'Tidak ada konsumen yang cocok dengan filter.'}</div>`
+    : filtered.map(k => {
         const bayar = totalBayarKonsumen(k.id);
         const sisa = sisaKonsumen(k);
         const persen = k.harga > 0 ? Math.min(100, (bayar/k.harga)*100) : 0;
@@ -648,16 +854,89 @@ function viewKonsumen() {
             <div class="actions">
               <button class="primary small" onclick="openBayarModal('${k.id}')">💵 Bayar</button>
               <button class="primary small secondary" onclick="openRiwayatModal('${k.id}')">📋 Riwayat</button>
+              <button class="primary small secondary" onclick="cetakKartuAngsuran('${k.id}')">🖨️ Cetak</button>
               <button class="primary small secondary" onclick="openEditKonsumenModal('${k.id}')">✏️ Edit</button>
               <button class="primary small danger" onclick="hapusKonsumen('${k.id}')">🗑️</button>
             </div>
           </div>
         `;
       }).join('');
+
   return `
     <button class="primary" onclick="openKonsumenModal()" style="margin-bottom:10px">+ Tambah Konsumen</button>
+
+    <div class="filter-bar">
+      <div class="search-wrap">
+        <input id="searchKonsumen" placeholder="Cari nama atau blok..."
+          value="${escapeHtml(filterKonsumen.q)}"
+          oninput="updateFilter('q', this.value)">
+      </div>
+      <div class="filter-row">
+        <select onchange="updateFilter('status', this.value)">
+          <option value="all" ${filterKonsumen.status==='all'?'selected':''}>Semua Status</option>
+          <option value="kredit" ${filterKonsumen.status==='kredit'?'selected':''}>Kredit</option>
+          <option value="lunas" ${filterKonsumen.status==='lunas'?'selected':''}>Lunas</option>
+        </select>
+        <select onchange="updateFilter('sort', this.value)">
+          <option value="terbaru" ${filterKonsumen.sort==='terbaru'?'selected':''}>Terbaru</option>
+          <option value="blok" ${filterKonsumen.sort==='blok'?'selected':''}>Blok (A-Z)</option>
+          <option value="nama" ${filterKonsumen.sort==='nama'?'selected':''}>Nama (A-Z)</option>
+          <option value="sisa" ${filterKonsumen.sort==='sisa'?'selected':''}>Sisa Terbesar</option>
+        </select>
+      </div>
+      <div class="filter-info">
+        <span>${filtered.length} dari ${totalAll} konsumen</span>
+        ${(filterKonsumen.q || filterKonsumen.status !== 'all' || filterKonsumen.sort !== 'terbaru') ? 
+          `<button onclick="resetFilter()">Reset filter</button>` : ''}
+      </div>
+    </div>
+
     ${list}
   `;
+}
+
+function updateFilter(key, value) {
+  filterKonsumen[key] = value;
+  // Re-render hanya bagian list, tapi simpelnya render ulang
+  const inputFocusId = document.activeElement?.id;
+  const cursorPos = document.activeElement?.selectionStart;
+  renderContent();
+  // Kembalikan focus & cursor kalau sedang search
+  if (inputFocusId === 'searchKonsumen') {
+    const el = document.getElementById('searchKonsumen');
+    if (el) {
+      el.focus();
+      el.setSelectionRange(cursorPos, cursorPos);
+    }
+  }
+}
+
+function resetFilter() {
+  filterKonsumen = { q: '', status: 'all', sort: 'terbaru' };
+  renderContent();
+}
+
+/* ============================================
+   MODAL: KONSUMEN
+   ============================================ */
+function openModal(html) {
+  let modalBg = document.getElementById('modalBg');
+  if (!modalBg) {
+    modalBg = document.createElement('div');
+    modalBg.id = 'modalBg';
+    modalBg.className = 'modal-bg';
+    modalBg.innerHTML = '<div class="modal" id="modalContent"></div>';
+    document.body.appendChild(modalBg);
+    modalBg.addEventListener('click', e => {
+      if (e.target.id === 'modalBg') closeModal();
+    });
+  }
+  document.getElementById('modalContent').innerHTML = html;
+  modalBg.classList.add('show');
+}
+function closeModal() {
+  const modalBg = document.getElementById('modalBg');
+  if (modalBg) modalBg.classList.remove('show');
 }
 
 function openKonsumenModal() {
@@ -719,7 +998,6 @@ async function simpanKonsumen() {
   const { data: inserted, error } = await sb.from('kavling_konsumen').insert(data).select().single();
   if (error) { btn.disabled = false; btn.textContent = 'Simpan'; return alert('Gagal: ' + error.message); }
   state.konsumen.unshift(inserted);
-  // Auto catat DP sebagai pembayaran
   if (data.dp > 0) {
     const bayarData = {
       user_id: user.id,
@@ -918,7 +1196,8 @@ function openRiwayatModal(konsumenId) {
         </div>
       `).join('')
     }
-    <button class="primary secondary" onclick="closeModal()" style="margin-top:12px">Tutup</button>
+    <button class="primary" onclick="closeModal();cetakKartuAngsuran('${konsumenId}')" style="margin-top:12px">🖨️ Cetak Kartu Angsuran</button>
+    <button class="primary secondary" onclick="closeModal()" style="margin-top:6px">Tutup</button>
   `);
 }
 
@@ -1002,30 +1281,7 @@ async function hapusPengeluaran(id) {
 }
 
 /* ============================================
-   MODAL UMUM
-   ============================================ */
-function openModal(html) {
-  let modalBg = document.getElementById('modalBg');
-  if (!modalBg) {
-    modalBg = document.createElement('div');
-    modalBg.id = 'modalBg';
-    modalBg.className = 'modal-bg';
-    modalBg.innerHTML = '<div class="modal" id="modalContent"></div>';
-    document.body.appendChild(modalBg);
-    modalBg.addEventListener('click', e => {
-      if (e.target.id === 'modalBg') closeModal();
-    });
-  }
-  document.getElementById('modalContent').innerHTML = html;
-  modalBg.classList.add('show');
-}
-function closeModal() {
-  const modalBg = document.getElementById('modalBg');
-  if (modalBg) modalBg.classList.remove('show');
-}
-
-/* ============================================
-   USER MENU (Akun)
+   USER MENU
    ============================================ */
 function openUserMenu() {
   openModal(`
@@ -1038,6 +1294,338 @@ function openUserMenu() {
     <button class="primary danger" onclick="closeModal();doLogout()">🚪 Logout</button>
     <button class="primary secondary" onclick="closeModal()" style="margin-top:6px">Tutup</button>
   `);
+}
+
+/* ============================================
+   EXPORT JSON
+   ============================================ */
+function downloadJson(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportKawasanIni() {
+  const kid = activeKawasan;
+  const k = getKawasan(kid);
+  const data = {
+    exported_at: new Date().toISOString(),
+    kawasan: k,
+    konsumen: state.konsumen.filter(x => x.kawasan_id === kid),
+    pembayaran: state.pembayaran.filter(x => x.kawasan_id === kid),
+    pengeluaran: state.pengeluaran.filter(x => x.kawasan_id === kid),
+  };
+  downloadJson(data, `kavling-${k.nama.replace(/\s+/g,'_')}-${new Date().toISOString().slice(0,10)}.json`);
+}
+
+function exportSemuaKawasan() {
+  const data = {
+    exported_at: new Date().toISOString(),
+    user_email: user?.email,
+    kawasan: state.kawasan,
+    konsumen: state.konsumen,
+    pembayaran: state.pembayaran,
+    pengeluaran: state.pengeluaran,
+  };
+  downloadJson(data, `kavling-SEMUA-${new Date().toISOString().slice(0,10)}.json`);
+}
+
+/* ============================================
+   PRINT: LAPORAN KAWASAN
+   ============================================ */
+function cetakLaporanKawasan() {
+  const kid = activeKawasan;
+  const k = getKawasan(kid);
+  const kons = getFilteredKonsumen();
+  if (kons.length === 0) return alert('Tidak ada data konsumen untuk dicetak.');
+
+  const totalNilai = kons.reduce((s,x) => s + (+x.harga||0), 0);
+  const totalBayar = kons.reduce((s,x) => s + totalBayarKonsumen(x.id), 0);
+  const totalSisa = totalNilai - totalBayar;
+
+  const rows = kons.map((x, i) => {
+    const bayar = totalBayarKonsumen(x.id);
+    const sisa = sisaKonsumen(x);
+    const st = statusKonsumen(x);
+    return `<tr>
+      <td style="text-align:center">${i+1}</td>
+      <td>${escapeHtml(x.nama)}</td>
+      <td>${escapeHtml(x.blok||'-')}</td>
+      <td class="num">${(x.luas||0).toLocaleString('id-ID')}</td>
+      <td class="num">${fmtRp(x.harga)}</td>
+      <td class="num">${fmtRp(bayar)}</td>
+      <td class="num">${fmtRp(sisa)}</td>
+      <td style="text-align:center">${st === 'lunas' ? 'LUNAS' : 'KREDIT'}</td>
+    </tr>`;
+  }).join('');
+
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Laporan Kawasan - ${escapeHtml(k.nama)}</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; color: #000; }
+        h1 { text-align: center; margin-bottom: 4px; font-size: 18px; }
+        .sub { text-align: center; font-size: 12px; margin-bottom: 16px; color: #555; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
+        th, td { border: 1px solid #333; padding: 5px 8px; }
+        th { background: #f0f0f0; font-weight: 700; text-align: left; }
+        td.num { text-align: right; }
+        tfoot td { font-weight: 700; background: #f9f9f9; }
+        .footer { margin-top: 24px; font-size: 11px; text-align: right; }
+        .ttd { margin-top: 60px; display: flex; justify-content: space-between; font-size: 12px; }
+        .ttd > div { text-align: center; }
+        .ttd .line { margin-top: 60px; border-top: 1px solid #000; padding-top: 4px; min-width: 180px; }
+        @media print {
+          body { padding: 0; }
+        }
+      </style>
+    </head>
+    <body>
+      <h1>LAPORAN DATA KONSUMEN</h1>
+      <div class="sub">${escapeHtml(k.nama)}</div>
+      <div class="sub">Dicetak: ${fmtTglLong(new Date())}</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:center;width:30px">No</th>
+            <th>Nama Konsumen</th>
+            <th>Blok</th>
+            <th style="text-align:right">Luas (m²)</th>
+            <th style="text-align:right">Harga</th>
+            <th style="text-align:right">Terbayar</th>
+            <th style="text-align:right">Sisa</th>
+            <th style="text-align:center">Status</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" style="text-align:right">TOTAL</td>
+            <td class="num">${fmtRp(totalNilai)}</td>
+            <td class="num">${fmtRp(totalBayar)}</td>
+            <td class="num">${fmtRp(totalSisa)}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+      <div class="ttd">
+        <div><div>Mengetahui,</div><div class="line">(........................)</div></div>
+        <div><div>Dicetak oleh,</div><div class="line">(........................)</div></div>
+      </div>
+      <div class="footer">Halaman 1 · Dicetak dari Manajemen Tanah Kavling</div>
+      <script>window.onload = function() { setTimeout(function() { window.print(); }, 200); }<\/script>
+    </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+/* ============================================
+   PRINT: REKAP SEMUA KAWASAN
+   ============================================ */
+function cetakRekapSemuaKawasan() {
+  const rows = state.kawasan.map(k => {
+    const kons = konsumenByKawasan(k.id);
+    const totalNilai = kons.reduce((s,x) => s + (+x.harga||0), 0);
+    const totalBayar = kons.reduce((s,x) => s + totalBayarKonsumen(x.id), 0);
+    const totalSisa = totalNilai - totalBayar;
+    const masuk = state.pembayaran.filter(p => p.kawasan_id === k.id)
+                    .reduce((s,p) => s + (+p.jumlah||0), 0);
+    const keluar = state.pengeluaran.filter(p => p.kawasan_id === k.id)
+                    .reduce((s,p) => s + (+p.jumlah||0), 0);
+    return `<tr>
+      <td>${escapeHtml(k.nama)}</td>
+      <td class="num">${kons.length}</td>
+      <td class="num">${fmtRp(totalNilai)}</td>
+      <td class="num">${fmtRp(totalBayar)}</td>
+      <td class="num">${fmtRp(totalSisa)}</td>
+      <td class="num">${fmtRp(keluar)}</td>
+      <td class="num">${fmtRp(masuk - keluar)}</td>
+    </tr>`;
+  }).join('');
+
+  // Total
+  const totKons = state.konsumen.length;
+  const totNilai = state.konsumen.reduce((s,x) => s + (+x.harga||0), 0);
+  const totBayar = state.pembayaran.reduce((s,p) => s + (+p.jumlah||0), 0);
+  const totSisa = totNilai - totBayar;
+  const totKeluar = state.pengeluaran.reduce((s,p) => s + (+p.jumlah||0), 0);
+  const totSaldo = totBayar - totKeluar;
+
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Rekap Semua Kawasan</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; color: #000; }
+        h1 { text-align: center; margin-bottom: 4px; font-size: 18px; }
+        .sub { text-align: center; font-size: 12px; margin-bottom: 16px; color: #555; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
+        th, td { border: 1px solid #333; padding: 5px 8px; }
+        th { background: #f0f0f0; font-weight: 700; text-align: left; }
+        td.num { text-align: right; }
+        tfoot td { font-weight: 700; background: #f9f9f9; }
+        .footer { margin-top: 24px; font-size: 11px; text-align: right; }
+        .ttd { margin-top: 60px; display: flex; justify-content: space-between; font-size: 12px; }
+        .ttd > div { text-align: center; }
+        .ttd .line { margin-top: 60px; border-top: 1px solid #000; padding-top: 4px; min-width: 180px; }
+      </style>
+    </head>
+    <body>
+      <h1>REKAP SEMUA KAWASAN</h1>
+      <div class="sub">Dicetak: ${fmtTglLong(new Date())} · oleh ${escapeHtml(user?.email || '-')}</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Kawasan</th>
+            <th style="text-align:right">Jml Konsumen</th>
+            <th style="text-align:right">Total Nilai</th>
+            <th style="text-align:right">Terbayar</th>
+            <th style="text-align:right">Sisa Piutang</th>
+            <th style="text-align:right">Pengeluaran</th>
+            <th style="text-align:right">Saldo Kas</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr>
+            <td>TOTAL</td>
+            <td class="num">${totKons}</td>
+            <td class="num">${fmtRp(totNilai)}</td>
+            <td class="num">${fmtRp(totBayar)}</td>
+            <td class="num">${fmtRp(totSisa)}</td>
+            <td class="num">${fmtRp(totKeluar)}</td>
+            <td class="num">${fmtRp(totSaldo)}</td>
+          </tr>
+        </tfoot>
+      </table>
+      <div class="ttd">
+        <div><div>Mengetahui,</div><div class="line">(........................)</div></div>
+        <div><div>Dicetak oleh,</div><div class="line">(........................)</div></div>
+      </div>
+      <div class="footer">Dicetak dari Manajemen Tanah Kavling</div>
+      <script>window.onload = function() { setTimeout(function() { window.print(); }, 200); }<\/script>
+    </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+/* ============================================
+   PRINT: KARTU ANGSURAN PER KONSUMEN
+   ============================================ */
+function cetakKartuAngsuran(konsumenId) {
+  const k = state.konsumen.find(x => x.id === konsumenId);
+  if (!k) return alert('Konsumen tidak ditemukan');
+  const kw = getKawasan(k.kawasan_id);
+  const pembayaran = pembayaranByKonsumen(konsumenId)
+    .sort((a,b) => new Date(a.tanggal) - new Date(b.tanggal));
+  const total = pembayaran.reduce((s,p) => s + (+p.jumlah||0), 0);
+  const sisa = sisaKonsumen(k);
+  const st = statusKonsumen(k);
+
+  const rows = pembayaran.map((p, i) => `
+    <tr>
+      <td style="text-align:center">${i+1}</td>
+      <td>${fmtTglLong(p.tanggal)}</td>
+      <td class="num">${fmtRp(p.jumlah)}</td>
+      <td>${escapeHtml(p.keterangan || '-')}</td>
+      <td class="num">${fmtRp(total - pembayaran.slice(0, i+1).reduce((s,x) => s + (+x.jumlah||0), 0))}</td>
+    </tr>
+  `).join('');
+
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Kartu Angsuran - ${escapeHtml(k.nama)}</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; color: #000; }
+        h1 { text-align: center; margin-bottom: 4px; font-size: 18px; }
+        .sub { text-align: center; font-size: 12px; margin-bottom: 16px; color: #555; }
+        .info { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; font-size: 12px; margin-bottom: 12px; }
+        .info-row { display: flex; }
+        .info-row .label { width: 110px; font-weight: 600; }
+        .info-row .val { flex: 1; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
+        th, td { border: 1px solid #333; padding: 5px 8px; }
+        th { background: #f0f0f0; font-weight: 700; text-align: left; }
+        td.num { text-align: right; }
+        tfoot td { font-weight: 700; background: #f9f9f9; }
+        .footer { margin-top: 24px; font-size: 11px; text-align: right; }
+        .ttd { margin-top: 60px; display: flex; justify-content: space-between; font-size: 12px; }
+        .ttd > div { text-align: center; }
+        .ttd .line { margin-top: 60px; border-top: 1px solid #000; padding-top: 4px; min-width: 180px; }
+        .status-badge { display: inline-block; padding: 2px 10px; border-radius: 4px; font-weight: 700; font-size: 11px; }
+        .status-badge.lunas { background: #d4edda; color: #155724; }
+        .status-badge.kredit { background: #fff3cd; color: #856404; }
+      </style>
+    </head>
+    <body>
+      <h1>KARTU ANGSURAN KONSUMEN</h1>
+      <div class="sub">${escapeHtml(kw?.nama || '-')} · Status: <span class="status-badge ${st}">${st.toUpperCase()}</span></div>
+      
+      <div class="info">
+        <div class="info-row"><div class="label">Nama</div><div class="val">: <b>${escapeHtml(k.nama)}</b></div></div>
+        <div class="info-row"><div class="label">Blok</div><div class="val">: ${escapeHtml(k.blok || '-')}</div></div>
+        <div class="info-row"><div class="label">Luas</div><div class="val">: ${k.luas || 0} m²</div></div>
+        <div class="info-row"><div class="label">No. Telp</div><div class="val">: ${escapeHtml(k.telp || '-')}</div></div>
+        <div class="info-row"><div class="label">Harga Total</div><div class="val">: <b>${fmtRp(k.harga)}</b></div></div>
+        <div class="info-row"><div class="label">DP</div><div class="val">: ${fmtRp(k.dp)}</div></div>
+        <div class="info-row"><div class="label">Cicilan/bulan</div><div class="val">: ${fmtRp(k.cicilan_per_bulan)} x ${k.tenor} bln</div></div>
+        <div class="info-row"><div class="label">Tanggal Mulai</div><div class="val">: ${fmtTglLong(k.tgl_mulai)}</div></div>
+      </div>
+
+      ${k.catatan ? `<div style="font-size:11px;margin-bottom:12px;padding:8px;border-left:3px solid #289672;background:#f9f9f9"><b>Catatan:</b> ${escapeHtml(k.catatan)}</div>` : ''}
+
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:center;width:30px">#</th>
+            <th>Tanggal</th>
+            <th style="text-align:right">Jumlah</th>
+            <th>Keterangan</th>
+            <th style="text-align:right">Sisa Setelah Bayar</th>
+          </tr>
+        </thead>
+        <tbody>${rows || '<tr><td colspan="5" style="text-align:center;font-style:italic;color:#888">Belum ada pembayaran</td></tr>'}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2" style="text-align:right">TOTAL TERBAYAR</td>
+            <td class="num">${fmtRp(total)}</td>
+            <td colspan="2"></td>
+          </tr>
+          <tr>
+            <td colspan="2" style="text-align:right">SISA PIUTANG</td>
+            <td class="num" style="color:${sisa>0?'#d9534f':'#155724'}">${fmtRp(sisa)}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="ttd">
+        <div><div>Konsumen,</div><div class="line">(${escapeHtml(k.nama)})</div></div>
+        <div><div>Admin,</div><div class="line">(........................)</div></div>
+      </div>
+      <div class="footer">Dicetak: ${fmtTglLong(new Date())} · Manajemen Tanah Kavling</div>
+      <script>window.onload = function() { setTimeout(function() { window.print(); }, 200); }<\/script>
+    </body>
+    </html>
+  `);
+  win.document.close();
 }
 
 /* ============================================
@@ -1063,9 +1651,9 @@ sb.auth.onAuthStateChange(async (event, s) => {
     state = { kawasan: [], konsumen: [], pembayaran: [], pengeluaran: [] };
     activeKawasan = null;
     activeView = 'dashboard';
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
     renderAuthScreen();
   } else if (event === 'PASSWORD_RECOVERY') {
-    // User klik link reset password di email
     setTimeout(() => {
       openModal(`
         <h3>🔒 Set Password Baru</h3>
