@@ -338,14 +338,23 @@ async function doRegister() {
   if (pass !== pass2) return showAuthMsg('Konfirmasi password tidak cocok');
   const btn = document.getElementById('btnRegister');
   btn.disabled = true; btn.textContent = 'Memproses...';
-  const { data, error } = await sb.auth.signUp({ email, password: pass });
+  
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password: pass,
+    options: {
+      emailRedirectTo: 'https://suryadieduc-action.github.io/Tanah-Kavling_App/',
+      data: { source: 'kavling-app' }
+    }
+  });
+  
   btn.disabled = false; btn.textContent = 'Daftar';
   if (error) return showAuthMsg(error.message);
   if (data.user && !data.session) {
     showAuthMsg('Berhasil daftar! Cek email untuk verifikasi, lalu login.', 'ok');
     switchAuthTab('login');
   } else {
-    showAuthMsg('Berhasil daftar & login otomatis!', 'ok');
+    showAuthMsg('Berhasil daftar!', 'ok');
   }
 }
 
