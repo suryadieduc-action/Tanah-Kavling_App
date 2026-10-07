@@ -716,20 +716,39 @@ function viewDashboard() {
       </div>
     </div>
 
-        <div class="card">
+            <div class="card">
       <h3>📥 Export / Backup</h3>
       <button class="primary secondary" onclick="exportKawasanIni()" style="margin-bottom:6px">Export Kawasan Ini (JSON)</button>
-      <button class="primary secondary" onclick="exportSemuaKawasan()" style="margin-bottom:6px">Export SEMUA Kawasan (JSON)</button>
+      <button class="primary secondary" onclick="exportSemuaKawasan()">Export SEMUA Kawasan (JSON)</button>
       <hr style="margin:12px 0;border:none;border-top:1px solid #eee">
+      
       <h3>📤 Import / Restore</h3>
       <p style="font-size:11px;color:#888;margin-bottom:8px">
-        Restore dari file JSON hasil export. Data lama akan tetap ada, data baru akan ditambahkan.
+        <b>Replace Total</b>: hapus semua data lama, ganti dengan file JSON.<br>
+        <b>Tambah</b>: tambahkan data dari file ke data yang sudah ada.
       </p>
+      <label class="primary danger" style="display:block;text-align:center;cursor:pointer;margin-bottom:6px">
+        🔄 Replace Total (hapus & import ulang)
+        <input type="file" accept=".json" style="display:none" onchange="handleImportFile(event, 'replace')">
+      </label>
       <label class="primary" style="display:block;text-align:center;cursor:pointer;background:#2a7ae2">
-        📂 Pilih File JSON & Import
-        <input type="file" accept=".json" style="display:none" onchange="handleImportFile(event)">
+        ➕ Tambah (gabung dengan data lama)
+        <input type="file" accept=".json" style="display:none" onchange="handleImportFile(event, 'append')">
       </label>
       <div id="importProgress" style="display:none;margin-top:10px;font-size:12px;color:#666"></div>
+    </div>
+
+    <div class="card">
+      <h3>⚙️ Ubah Nama Kawasan</h3>
+      <div class="form-group">
+        <input id="editNamaKawasan" value="${escapeHtml(k?.nama || '')}">
+      </div>
+      <button class="primary" onclick="updateNamaKawasan()">Simpan Nama</button>
+      <hr style="margin:12px 0;border:none;border-top:1px solid #eee">
+      <p style="font-size:11px;color:#888;margin-bottom:8px">
+        Hapus kawasan ini beserta semua konsumen & riwayat pembayarannya:
+      </p>
+      <button class="primary danger" onclick="hapusKawasanIni()">🗑️ Hapus Kawasan Ini</button>
     </div>
   `;
 }
@@ -1631,103 +1650,120 @@ function cetakKartuAngsuran(konsumenId) {
 }
 
 /* ============================================
-   IMPORT JSON (RESTORE)
+   IMPORT JSON (REPLACE & APPEND)
    ============================================ */
-async function handleImportFile(event) {
+async function handleImportFile(event, mode = 'append') {
   const file = event.target.files[0];
   if (!file) return;
   
-  if (!confirm('⚠️ Import akan MENAMBAHKAN data dari file ke akun kamu.\n\nData lama TIDAK akan terhapus, tapi data baru akan ditambahkan.\n\nLanjutkan?')) {
+  const konfirmasiTeks = mode === 'replace'
+    ? '⚠️ REPLACE TOTAL ⚠️\n\nSemua data lama (kawasan, konsumen, pembayaran, pengeluaran) akan DIHAPUS dan DIGANTI dengan data dari file.\n\nData lama tidak bisa dikembalikan!\n\nLanjutkan?'
+    : '➕ TAMBAH DATA\n\nData dari file akan DITAMBAHKAN ke data yang sudah ada.\n\nLanjutkan?';
+  
+  if (!confirm(konfirmasiTeks)) {
     event.target.value = '';
     return;
+  }
+  
+  // Double confirm untuk replace
+  if (mode === 'replace') {
+    if (!confirm('🚨 Yakin 100%? Ini akan menghapus semua data akun kamu saat ini.')) {
+      event.target.value = '';
+      return;
+    }
   }
   
   try {
     const text = await file.text();
     const data = JSON.parse(text);
-    await prosesImport(data);
+    await prosesImport(data, mode);
   } catch (err) {
     alert('❌ Gagal membaca file: ' + err.message);
   }
   event.target.value = '';
 }
 
-async function prosesImport(data) {
+async function prosesImport(data, mode = 'append') {
   const progress = document.getElementById('importProgress');
-  if (progress) {
-    progress.style.display = 'block';
-    progress.innerHTML = '⏳ Memproses...';
-  }
+  const setProgress = (txt) => {
+    if (progress) { progress.style.display = 'block'; progress.innerHTML = txt; }
+  };
   
-  // Detect format: single kawasan atau semua kawasan
+  setProgress('⏳ Memvalidasi file...');
+  
+  // Detect format
   let kawasanList = [];
   let konsumenList = [];
   let pembayaranList = [];
   let pengeluaranList = [];
   
   if (data.kawasan && !Array.isArray(data.kawasan)) {
-    // Format export kawasan tunggal
     kawasanList = [data.kawasan];
     konsumenList = data.konsumen || [];
     pembayaranList = data.pembayaran || [];
     pengeluaranList = data.pengeluaran || [];
   } else if (Array.isArray(data.kawasan)) {
-    // Format export semua kawasan
     kawasanList = data.kawasan;
     konsumenList = data.konsumen || [];
     pembayaranList = data.pembayaran || [];
     pengeluaranList = data.pengeluaran || [];
   } else {
-    throw new Error('Format file tidak dikenali. Pastikan file hasil export dari aplikasi ini.');
+    throw new Error('Format file tidak dikenali.');
   }
   
   if (kawasanList.length === 0) {
     throw new Error('File tidak berisi data kawasan.');
   }
   
-  // Mapping: id lama -> id baru (di-generate ulang)
-  // Karena kita pakai UUID dari Supabase, kalau import ke akun berbeda, id lama tidak boleh dipakai
+  // ========== MODE REPLACE: Hapus semua data dulu ==========
+  if (mode === 'replace') {
+    setProgress('🗑️ Menghapus data lama...');
+    // Hapus semua kawasan (cascade akan hapus konsumen, pembayaran, pengeluaran)
+    const { error: delErr } = await sb.from('kavling_kawasan').delete().eq('user_id', user.id);
+    if (delErr) {
+      // Fallback: hapus manual satu-satu kalau cascade tidak jalan
+      await sb.from('kavling_pembayaran').delete().eq('user_id', user.id);
+      await sb.from('kavling_pengeluaran').delete().eq('user_id', user.id);
+      await sb.from('kavling_konsumen').delete().eq('user_id', user.id);
+      await sb.from('kavling_kawasan').delete().eq('user_id', user.id);
+    }
+    // Reset state lokal
+    state.kawasan = [];
+    state.konsumen = [];
+    state.pembayaran = [];
+    state.pengeluaran = [];
+  }
+  
+  // Mapping id lama -> id baru
   const idMapKawasan = {};
   const idMapKonsumen = {};
   
   let stats = {
-    kawasan: 0,
-    konsumen: 0,
-    pembayaran: 0,
-    pengeluaran: 0,
-    skipped: 0,
+    kawasan: 0, konsumen: 0, pembayaran: 0, pengeluaran: 0, skipped: 0,
   };
   
-  if (progress) progress.innerHTML = '⏳ Import kawasan...';
+  const suffix = mode === 'append' ? ' (import)' : '';
   
   // 1. IMPORT KAWASAN
+  setProgress('⏳ Import kawasan...');
   for (const kw of kawasanList) {
     const newKw = {
       user_id: user.id,
-      nama: kw.nama + (kw.nama && !kw.nama.includes('(import)') ? ' (import)' : ''),
+      nama: (kw.nama || 'Kawasan') + suffix,
       urutan: kw.urutan || 99,
     };
     const { data: inserted, error } = await sb.from('kavling_kawasan').insert(newKw).select().single();
-    if (error) {
-      console.warn('Skip kawasan:', kw.nama, error.message);
-      stats.skipped++;
-      continue;
-    }
+    if (error) { stats.skipped++; continue; }
     idMapKawasan[kw.id] = inserted.id;
     state.kawasan.push(inserted);
     stats.kawasan++;
   }
   
-  if (progress) progress.innerHTML = `⏳ Import konsumen (0/${konsumenList.length})...`;
-  
   // 2. IMPORT KONSUMEN
   for (let i = 0; i < konsumenList.length; i++) {
     const k = konsumenList[i];
     const newKawasanId = idMapKawasan[k.kawasan_id];
-    if (!newKawasanId) {
-      stats.skipped++;
-      continue;
-    }
+    if (!newKawasanId) { stats.skipped++; continue; }
     const newK = {
       user_id: user.id,
       kawasan_id: newKawasanId,
@@ -1743,31 +1779,19 @@ async function prosesImport(data) {
       catatan: k.catatan || null,
     };
     const { data: inserted, error } = await sb.from('kavling_konsumen').insert(newK).select().single();
-    if (error) {
-      console.warn('Skip konsumen:', k.nama, error.message);
-      stats.skipped++;
-      continue;
-    }
+    if (error) { stats.skipped++; continue; }
     idMapKonsumen[k.id] = inserted.id;
     state.konsumen.unshift(inserted);
     stats.konsumen++;
-    
-    if (progress && i % 5 === 0) {
-      progress.innerHTML = `⏳ Import konsumen (${i+1}/${konsumenList.length})...`;
-    }
+    if (i % 5 === 0) setProgress(`⏳ Import konsumen (${i+1}/${konsumenList.length})...`);
   }
-  
-  if (progress) progress.innerHTML = `⏳ Import pembayaran (0/${pembayaranList.length})...`;
   
   // 3. IMPORT PEMBAYARAN
   for (let i = 0; i < pembayaranList.length; i++) {
     const p = pembayaranList[i];
     const newKonsumenId = idMapKonsumen[p.konsumen_id];
     const newKawasanId = idMapKawasan[p.kawasan_id];
-    if (!newKonsumenId || !newKawasanId) {
-      stats.skipped++;
-      continue;
-    }
+    if (!newKonsumenId || !newKawasanId) { stats.skipped++; continue; }
     const newP = {
       user_id: user.id,
       kawasan_id: newKawasanId,
@@ -1777,28 +1801,17 @@ async function prosesImport(data) {
       keterangan: p.keterangan || null,
     };
     const { data: inserted, error } = await sb.from('kavling_pembayaran').insert(newP).select().single();
-    if (error) {
-      stats.skipped++;
-      continue;
-    }
+    if (error) { stats.skipped++; continue; }
     state.pembayaran.unshift(inserted);
     stats.pembayaran++;
-    
-    if (progress && i % 10 === 0) {
-      progress.innerHTML = `⏳ Import pembayaran (${i+1}/${pembayaranList.length})...`;
-    }
+    if (i % 10 === 0) setProgress(`⏳ Import pembayaran (${i+1}/${pembayaranList.length})...`);
   }
-  
-  if (progress) progress.innerHTML = `⏳ Import pengeluaran (0/${pengeluaranList.length})...`;
   
   // 4. IMPORT PENGELUARAN
   for (let i = 0; i < pengeluaranList.length; i++) {
     const e = pengeluaranList[i];
     const newKawasanId = idMapKawasan[e.kawasan_id];
-    if (!newKawasanId) {
-      stats.skipped++;
-      continue;
-    }
+    if (!newKawasanId) { stats.skipped++; continue; }
     const newE = {
       user_id: user.id,
       kawasan_id: newKawasanId,
@@ -1808,35 +1821,62 @@ async function prosesImport(data) {
       keterangan: e.keterangan || null,
     };
     const { data: inserted, error } = await sb.from('kavling_pengeluaran').insert(newE).select().single();
-    if (error) {
-      stats.skipped++;
-      continue;
-    }
+    if (error) { stats.skipped++; continue; }
     state.pengeluaran.unshift(inserted);
     stats.pengeluaran++;
-    
-    if (progress && i % 10 === 0) {
-      progress.innerHTML = `⏳ Import pengeluaran (${i+1}/${pengeluaranList.length})...`;
-    }
+    if (i % 10 === 0) setProgress(`⏳ Import pengeluaran (${i+1}/${pengeluaranList.length})...`);
   }
   
-  if (progress) {
-    progress.innerHTML = `✅ Import selesai!`;
-  }
+  setProgress('✅ Import selesai!');
   
   // Reload data dari server supaya fresh
   await loadAllData();
   
+  const modeLabel = mode === 'replace' ? 'REPLACE TOTAL' : 'TAMBAH';
   alert(
-    `✅ Import Berhasil!\n\n` +
-    `Kawasan baru: ${stats.kawasan}\n` +
-    `Konsumen baru: ${stats.konsumen}\n` +
-    `Pembayaran baru: ${stats.pembayaran}\n` +
-    `Pengeluaran baru: ${stats.pengeluaran}\n` +
-    (stats.skipped > 0 ? `\n⚠️ Dilewati: ${stats.skipped} (data tidak lengkap)` : '') +
-    `\n\nCatatan: Nama kawasan diberi suffix "(import)" biar tidak bentrok dengan yang lama. Bisa di-rename nanti.`
+    `✅ Import ${modeLabel} Berhasil!\n\n` +
+    `Kawasan: ${stats.kawasan}\n` +
+    `Konsumen: ${stats.konsumen}\n` +
+    `Pembayaran: ${stats.pembayaran}\n` +
+    `Pengeluaran: ${stats.pengeluaran}\n` +
+    (stats.skipped > 0 ? `\n⚠️ Dilewati: ${stats.skipped}` : '')
   );
 }
+
+/* ============================================
+   HAPUS KAWASAN
+   ============================================ */
+async function hapusKawasanIni() {
+  const kid = activeKawasan;
+  const k = getKawasan(kid);
+  if (!k) return;
+  const jumlahKonsumen = state.konsumen.filter(x => x.kawasan_id === kid).length;
+  const pesan = `⚠️ HAPUS KAWASAN "${k.nama}"?\n\n` +
+    `Semua ${jumlahKonsumen} konsumen & riwayat pembayarannya akan terhapus.\n` +
+    `Tindakan ini tidak bisa dibatalkan!\n\nLanjutkan?`;
+  if (!confirm(pesan)) return;
+  if (!confirm('🚨 Yakin 100%? Pastikan sudah backup data sebelumnya!')) return;
+  
+  const { error } = await sb.from('kavling_kawasan').delete().eq('id', kid);
+  if (error) return alert('Gagal: ' + error.message);
+  
+  // Hapus dari state lokal
+  state.kawasan = state.kawasan.filter(x => x.id !== kid);
+  state.konsumen = state.konsumen.filter(x => x.kawasan_id !== kid);
+  state.pembayaran = state.pembayaran.filter(x => x.kawasan_id !== kid);
+  state.pengeluaran = state.pengeluaran.filter(x => x.kawasan_id !== kid);
+  
+  // Pilih kawasan pertama sebagai aktif
+  if (state.kawasan.length > 0) {
+    activeKawasan = state.kawasan[0].id;
+  } else {
+    activeKawasan = null;
+  }
+  
+  renderMain();
+  alert('✅ Kawasan berhasil dihapus.');
+}
+
 /* ============================================
    INIT & AUTH LISTENER
    ============================================ */
