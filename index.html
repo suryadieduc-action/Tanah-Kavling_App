@@ -1193,11 +1193,85 @@ async function simpanPembayaran() {
   renderContent();
 }
 
+/* ============================================
+   EDIT PEMBAYARAN
+   ============================================ */
+function openEditPembayaranModal(pembayaranId, konsumenId) {
+  const p = state.pembayaran.find(x => x.id === pembayaranId);
+  if (!p) return alert('Pembayaran tidak ditemukan');
+  const k = state.konsumen.find(x => x.id === konsumenId);
+  
+  openModal(`
+    <h3>✏️ Edit Pembayaran</h3>
+    <div style="font-size:12px;color:#666;margin-bottom:12px;padding:8px;background:#f9f9f9;border-radius:6px">
+      Konsumen: <b>${escapeHtml(k?.nama || '-')}</b>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Tanggal</label>
+        <input id="ep_tgl" type="date" value="${p.tanggal || ''}">
+      </div>
+      <div class="form-group">
+        <label>Jumlah (Rp)</label>
+        <input id="ep_jumlah" type="number" value="${p.jumlah || 0}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Keterangan</label>
+      <input id="ep_ket" value="${escapeHtml(p.keterangan||'')}" placeholder="Cicilan ke-X / DP / dll">
+    </div>
+    <button class="primary" id="btnUpdateBayar" onclick="updatePembayaran('${pembayaranId}','${konsumenId}')">💾 Simpan Perubahan</button>
+    <button class="primary secondary" onclick="openRiwayatModal('${konsumenId}')" style="margin-top:6px">← Kembali ke Riwayat</button>
+  `);
+}
+
+async function updatePembayaran(pembayaranId, konsumenId) {
+  const tanggal = document.getElementById('ep_tgl').value;
+  const jumlah = +document.getElementById('ep_jumlah').value || 0;
+  const keterangan = document.getElementById('ep_ket').value.trim();
+  
+  if (!tanggal) return alert('Tanggal wajib diisi');
+  if (jumlah <= 0) return alert('Jumlah harus > 0');
+  
+  const btn = document.getElementById('btnUpdateBayar');
+  btn.disabled = true; btn.textContent = 'Menyimpan...';
+  
+  const updates = { tanggal, jumlah, keterangan };
+  const { error } = await sb.from('kavling_pembayaran').update(updates).eq('id', pembayaranId);
+  
+  if (error) {
+    btn.disabled = false; btn.textContent = '💾 Simpan Perubahan';
+    return alert('Gagal: ' + error.message);
+  }
+  
+  // Update state lokal
+  const p = state.pembayaran.find(x => x.id === pembayaranId);
+  if (p) Object.assign(p, updates);
+  
+  // Kembali ke modal riwayat (auto refresh)
+  openRiwayatModal(konsumenId);
+  // Refresh list konsumen di background biar progress bar update
+  renderContent();
+}
+
 async function hapusPembayaran(id) {
   if (!confirm('Hapus pembayaran ini?')) return;
   const { error } = await sb.from('kavling_pembayaran').delete().eq('id', id);
   if (error) return alert('Gagal: ' + error.message);
   state.pembayaran = state.pembayaran.filter(p => p.id !== id);
+  renderContent();
+}
+
+async function hapusPembayaranDariModal(pembayaranId, konsumenId) {
+  if (!confirm('Hapus pembayaran ini?')) return;
+  const { error } = await sb.from('kavling_pembayaran').delete().eq('id', pembayaranId);
+  if (error) return alert('Gagal: ' + error.message);
+  
+  // Update state
+  state.pembayaran = state.pembayaran.filter(p => p.id !== pembayaranId);
+  
+  // Refresh modal riwayat & list konsumen
+  openRiwayatModal(konsumenId);
   renderContent();
 }
 
@@ -1216,12 +1290,17 @@ function openRiwayatModal(konsumenId) {
     </div>
     ${list.length === 0 ? '<div class="empty">Belum ada pembayaran.</div>' :
       list.map((p,i) => `
-        <div style="padding:8px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <div style="font-weight:600">#${i+1} · ${fmtRp(p.jumlah)}</div>
-            <div style="font-size:11px;color:#888">${fmtTgl(p.tanggal)} · ${escapeHtml(p.keterangan||'-')}</div>
+        <div style="padding:10px 0;border-bottom:1px solid #eee">
+          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px">
+            <div style="flex:1">
+              <div style="font-weight:600;font-size:14px">#${i+1} · ${fmtRp(p.jumlah)}</div>
+              <div style="font-size:11px;color:#888;margin-top:2px">${fmtTgl(p.tanggal)} · ${escapeHtml(p.keterangan||'-')}</div>
+            </div>
           </div>
-          <button class="primary small danger" onclick="hapusPembayaran('${p.id}');closeModal()">🗑️</button>
+          <div style="display:flex;gap:6px">
+            <button class="primary small secondary" onclick="openEditPembayaranModal('${p.id}','${konsumenId}')" style="flex:1">✏️ Edit</button>
+            <button class="primary small danger" onclick="hapusPembayaranDariModal('${p.id}','${konsumenId}')" style="flex:1">🗑️ Hapus</button>
+          </div>
         </div>
       `).join('')
     }
