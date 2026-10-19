@@ -1362,6 +1362,7 @@ function viewPengeluaran() {
       <div style="font-size:20px;font-weight:700;color:#d9534f">${fmtRp(total)}</div>
     </div>
     <button class="primary" onclick="openPengeluaranModal()" style="margin-bottom:10px">+ Tambah Pengeluaran</button>
+    <button class="primary secondary" onclick="cetakLaporanPengeluaran()" style="margin-bottom:10px; background:#2a7ae2">🖨️ Cetak Laporan PDF</button>
     ${list}
   `;
 }
@@ -2154,7 +2155,99 @@ async function simpanResetPassword() {
   alert('✅ Password berhasil direset!');
   closeModal();
 }
+/* ============================================
+   PRINT: LAPORAN PENGELUARAN
+   ============================================ */
+function cetakLaporanPengeluaran() {
+  const kid = activeKawasan;
+  const k = getKawasan(kid);
+  
+  // Ambil data dan urutkan dari yang terlama ke terbaru biar rapi
+  const list = state.pengeluaran
+    .filter(p => p.kawasan_id === kid)
+    .sort((a,b) => new Date(a.tanggal) - new Date(b.tanggal));
+    
+  if (list.length === 0) return alert('Belum ada data pengeluaran untuk dicetak.');
+  
+  const total = list.reduce((s,p) => s + (+p.jumlah||0), 0);
 
+  const rows = list.map((p, i) => `
+    <tr>
+      <td style="text-align:center">${i+1}</td>
+      <td>${fmtTglLong(p.tanggal)}</td>
+      <td>${escapeHtml(p.kategori)}</td>
+      <td>${escapeHtml(p.keterangan || '-')}</td>
+      <td class="num">${fmtRp(p.jumlah)}</td>
+    </tr>
+  `).join('');
+
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Laporan Pengeluaran - ${escapeHtml(k.nama)}</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; color: #000; }
+        h1 { text-align: center; margin-bottom: 4px; font-size: 18px; }
+        .sub { text-align: center; font-size: 12px; margin-bottom: 16px; color: #555; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
+        th, td { border: 1px solid #333; padding: 6px 8px; }
+        th { background: #f0f0f0; font-weight: 700; text-align: left; }
+        td.num { text-align: right; }
+        tfoot td { font-weight: 700; background: #f9f9f9; }
+        .footer { margin-top: 24px; font-size: 11px; text-align: right; }
+        .ttd { margin-top: 60px; display: flex; justify-content: space-between; font-size: 12px; }
+        .ttd > div { text-align: center; }
+        .ttd .line { margin-top: 60px; border-top: 1px solid #000; padding-top: 4px; min-width: 180px; }
+        @media print {
+          body { padding: 0; }
+          @page { margin: 1cm; }
+        }
+      </style>
+    </head>
+    <body>
+      <h1>LAPORAN PENGELUARAN</h1>
+      <div class="sub">${escapeHtml(k.nama)}</div>
+      <div class="sub">Dicetak: ${fmtTglLong(new Date())} · oleh ${escapeHtml(user?.email || '-')}</div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:center;width:30px">No</th>
+            <th style="width:120px">Tanggal</th>
+            <th style="width:150px">Kategori</th>
+            <th>Keterangan</th>
+            <th style="text-align:right;width:120px">Jumlah (Rp)</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" style="text-align:right">TOTAL PENGELUARAN</td>
+            <td class="num" style="color:#d9534f">${fmtRp(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="ttd">
+        <div><div>Mengetahui,</div><div class="line">(........................)</div></div>
+        <div><div>Dicetak oleh,</div><div class="line">(${escapeHtml(user?.email || 'Admin')})</div></div>
+      </div>
+      
+      <script>
+  window.onload = function() { 
+    setTimeout(function() { 
+      window.print(); 
+    }, 200); 
+  }
+<\/script>
+    </body>
+    </html>
+  `);
+  win.document.close();
+}
 init();
 </script>
 </body>
