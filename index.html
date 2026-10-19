@@ -1327,20 +1327,35 @@ function viewPengeluaran() {
     .filter(p => p.kawasan_id === activeKawasan)
     .sort((a,b) => new Date(b.tanggal) - new Date(a.tanggal));
   const total = exp.reduce((s,p) => s + (+p.jumlah||0), 0);
+  
   const list = exp.length === 0
     ? `<div class="empty">Belum ada pengeluaran.</div>`
     : exp.map(p => `
         <div class="list-item expense">
-          <div class="row1">
-            <div class="title">${escapeHtml(p.kategori)}</div>
-            <div class="amount">-${fmtRp(p.jumlah)}</div>
-          </div>
-          <div class="meta">${fmtTgl(p.tanggal)} · ${escapeHtml(p.keterangan||'-')}</div>
-          <div class="actions">
-            <button class="primary small danger" onclick="hapusPengeluaran('${p.id}')">🗑️ Hapus</button>
+          <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+            <div style="flex:1;min-width:0">
+              <div class="title" style="margin-bottom:4px">${escapeHtml(p.kategori)}</div>
+              <div class="meta">${fmtTgl(p.tanggal)} · ${escapeHtml(p.keterangan||'-')}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+              <div class="amount" style="white-space:nowrap">-${fmtRp(p.jumlah)}</div>
+              <div style="display:flex;gap:4px">
+                <button onclick="openEditPengeluaranModal('${p.id}')"
+                  title="Edit"
+                  style="width:32px;height:32px;border:none;border-radius:6px;background:#2a7ae2;color:white;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">
+                  ✏️
+                </button>
+                <button onclick="hapusPengeluaran('${p.id}')"
+                  title="Hapus"
+                  style="width:32px;height:32px;border:none;border-radius:6px;background:#d9534f;color:white;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">
+                  🗑️
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       `).join('');
+      
   return `
     <div class="card">
       <h3>📤 Total Pengeluaran Kawasan Ini</h3>
@@ -1350,7 +1365,6 @@ function viewPengeluaran() {
     ${list}
   `;
 }
-
 function openPengeluaranModal() {
   const kategori = ['Pembelian Tanah','Sertifikat/AJB','Pematangan Lahan','Pagar & Jalan','Listrik/Air','Gaji Karyawan','Marketing','Lain-lain'];
   openModal(`
@@ -1370,6 +1384,75 @@ function openPengeluaranModal() {
   `);
 }
 
+ /* ============================================
+   EDIT PENGELUARAN
+   ============================================ */
+function openEditPengeluaranModal(id) {
+  const exp = state.pengeluaran.find(x => x.id === id);
+  if (!exp) return alert('Data pengeluaran tidak ditemukan');
+  
+  const kategori = ['Pembelian Tanah','Sertifikat/AJB','Pematangan Lahan','Pagar & Jalan','Listrik/Air','Gaji Karyawan','Marketing','Lain-lain'];
+  
+  // Pastikan kategori lama masuk ke dalam list (jika kategorinya custom)
+  if (!kategori.includes(exp.kategori) && exp.kategori) {
+    kategori.push(exp.kategori);
+  }
+
+  openModal(`
+    <h3>✏️ Edit Pengeluaran</h3>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Tanggal</label>
+        <input id="ee_tgl" type="date" value="${exp.tanggal || ''}">
+      </div>
+      <div class="form-group">
+        <label>Jumlah (Rp)</label>
+        <input id="ee_jumlah" type="number" value="${exp.jumlah || 0}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Kategori</label>
+      <select id="ee_kategori">
+        ${kategori.map(k => `<option value="${k}" ${k === exp.kategori ? 'selected' : ''}>${k}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Keterangan</label>
+      <textarea id="ee_ket" rows="2" placeholder="Detail pengeluaran...">${escapeHtml(exp.keterangan||'')}</textarea>
+    </div>
+    <button class="primary" id="btnUpdateExp" onclick="updatePengeluaran('${id}')">💾 Simpan Perubahan</button>
+    <button class="primary secondary" onclick="closeModal()" style="margin-top:6px">Batal</button>
+  `);
+}
+
+async function updatePengeluaran(id) {
+  const tanggal = document.getElementById('ee_tgl').value;
+  const jumlah = +document.getElementById('ee_jumlah').value || 0;
+  const kategori = document.getElementById('ee_kategori').value;
+  const keterangan = document.getElementById('ee_ket').value.trim();
+  
+  if (!tanggal) return alert('Tanggal wajib diisi');
+  if (jumlah <= 0) return alert('Jumlah harus > 0');
+  
+  const btn = document.getElementById('btnUpdateExp');
+  btn.disabled = true; btn.textContent = 'Menyimpan...';
+  
+  const updates = { tanggal, jumlah, kategori, keterangan };
+  const { error } = await sb.from('kavling_pengeluaran').update(updates).eq('id', id);
+  
+  if (error) {
+    btn.disabled = false; btn.textContent = '💾 Simpan Perubahan';
+    return alert('Gagal: ' + error.message);
+  }
+  
+  // Update state lokal agar UI langsung berubah tanpa reload
+  const exp = state.pengeluaran.find(x => x.id === id);
+  if (exp) Object.assign(exp, updates);
+  
+  closeModal();
+  renderContent();
+}
+ 
 async function simpanPengeluaran() {
   const jumlah = +document.getElementById('e_jumlah').value || 0;
   if (jumlah <= 0) return alert('Jumlah harus > 0');
