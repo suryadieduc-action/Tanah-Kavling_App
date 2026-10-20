@@ -404,6 +404,10 @@ function renderAuthScreen() {
             <label>Email</label>
             <input id="loginEmail" type="email" placeholder="email@contoh.com" autocomplete="email">
           </div>
+          <div style="text-align:center; margin-top:16px; border-top:1px solid #eee; padding-top:16px">
+          <p style="font-size:12px;color:#666;margin-bottom:8px">Anda Konsumen?</p>
+          <button onclick="openCekAngsuranModal()" style="background:#289672;color:white;border:none;padding:8px 16px;border-radius:6px;font-weight:600;cursor:pointer;width:100%">🔍 Cek Angsuran Saya</button>
+        </div>
           <div class="form-group">
             <label>Password</label>
             <input id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password">
@@ -870,6 +874,10 @@ function viewKonsumen() {
               </div>
               <div class="amount">${fmtRp(k.harga)}</div>
             </div>
+             <div class="meta" style="background:#f0fdf4;padding:4px 8px;border-radius:6px;margin-bottom:6px;border:1px solid #bbf7d0">
+              🔑 Kode Akses: <b style="letter-spacing:1px;font-size:13px">${k.kode_akses || '-'}</b>
+              <button onclick="shareKeWA('${escapeHtml(k.nama)}', '${k.kode_akses}', '${escapeHtml(k.blok||'')}')" style="margin-left:8px;background:#25D366;color:white;border:none;padding:2px 8px;border-radius:4px;font-size:10px;cursor:pointer">Share WA</button>
+            </div>
             <div class="meta">
               Blok: <b>${escapeHtml(k.blok||'-')}</b> · Luas: <b>${k.luas||'-'} m²</b><br>
               DP: ${fmtRp(k.dp)} · Cicilan: ${fmtRp(k.cicilan_per_bulan)} x ${k.tenor} bln<br>
@@ -1013,6 +1021,7 @@ async function simpanKonsumen() {
   const data = {
     user_id: user.id,
     kawasan_id: activeKawasan,
+    kode_akses: 'KAV-' + Math.random().toString(36).substring(2, 8).toUpperCase(),
     nama,
     blok: document.getElementById('f_blok').value.trim(),
     luas: +document.getElementById('f_luas').value || 0,
@@ -2247,6 +2256,110 @@ function cetakLaporanPengeluaran() {
     </html>
   `);
   win.document.close();
+}
+
+/* ============================================
+   PORTAL KONSUMEN (CEK ANGSURAN VIA KODE)
+   ============================================ */
+function openCekAngsuranModal() {
+  openModal(`
+    <h3>🔍 Cek Angsuran Konsumen</h3>
+    <p style="font-size:12px;color:#666;margin-bottom:12px">Masukkan Kode Akses yang diberikan oleh Admin.</p>
+    <div class="form-group">
+      <label>Kode Akses (Contoh: KAV-A1B2C3)</label>
+      <input id="cekKodeInput" placeholder="KAV-XXXXXX" style="text-transform:uppercase;font-weight:bold;letter-spacing:1px">
+    </div>
+    <button class="primary" onclick="prosesCekAngsuran()" id="btnCekAngsuran">Cari Data</button>
+    <button class="primary secondary" onclick="closeModal()" style="margin-top:6px">Batal</button>
+  `);
+}
+
+async function prosesCekAngsuran() {
+  const kode = document.getElementById('cekKodeInput').value.trim().toUpperCase();
+  if (!kode) return alert('Masukkan kode akses terlebih dahulu');
+  
+  const btn = document.getElementById('btnCekAngsuran');
+  btn.disabled = true; btn.textContent = 'Mencari...';
+
+  // Panggil RPC Supabase
+  const { data, error } = await sb.rpc('get_konsumen_data', { kode_input: kode });
+  
+  btn.disabled = false; btn.textContent = 'Cari Data';
+
+  if (error) return alert('Terjadi kesalahan sistem: ' + error.message);
+  if (data && data.error) return alert(data.error);
+
+  if (data && data.konsumen) {
+    tampilkanDataKonsumen(data);
+  }
+}
+
+function tampilkanDataKonsumen(data) {
+  const k = data.konsumen;
+  const kw = data.kawasan;
+  const list = data.pembayaran || [];
+  const totalBayar = list.reduce((s,p) => s + (+p.jumlah||0), 0);
+  const sisa = Math.max(0, (+k.harga||0) - totalBayar);
+  const persen = k.harga > 0 ? Math.min(100, (totalBayar/k.harga)*100) : 0;
+  const st = sisa <= 0 ? 'lunas' : 'kredit';
+
+  // Format tanggal
+  const tgl = (t) => t ? new Date(t).toLocaleDateString('id-ID', {day:'2-digit',month:'short',year:'numeric'}) : '-';
+  const rp = (n) => 'Rp ' + (n||0).toLocaleString('id-ID');
+
+  const riwayat = list.length === 0 ? '<div style="text-align:center;padding:20px;color:#888">Belum ada riwayat pembayaran.</div>' 
+    : list.map((p, i) => `
+      <div style="padding:10px 0;border-bottom:1px dashed #ddd;display:flex;justify-content:space-between">
+        <div>
+          <div style="font-weight:600;font-size:13px">${rp(p.jumlah)}</div>
+          <div style="font-size:11px;color:#888">${tgl(p.tanggal)} · ${p.keterangan || '-'}</div>
+        </div>
+        <div style="font-size:11px;color:#289672;font-weight:600;align-self:center">✓ Lunas</div>
+      </div>
+    `).join('');
+
+  openModal(`
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:32px;margin-bottom:4px">🏘️</div>
+      <h3 style="margin-bottom:2px">${k.nama}</h3>
+      <div style="font-size:12px;color:#666">${kw?.nama || '-'} · Blok ${k.blok || '-'}</div>
+    </div>
+
+    <div style="background:#f8f9fa;border-radius:10px;padding:12px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:12px;color:#666">Total Harga</span>
+        <span style="font-weight:600">${rp(k.harga)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:12px;color:#666">Total Terbayar</span>
+        <span style="font-weight:600;color:#289672">${rp(totalBayar)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:12px;color:#666">Sisa Angsuran</span>
+        <span style="font-weight:700;color:${sisa>0?'#d9534f':'#289672'}">${rp(sisa)}</span>
+      </div>
+      
+      <div class="progress-bar" style="margin-top:10px;height:8px"><div style="width:${persen}%"></div></div>
+      <div style="text-align:center;font-size:11px;color:#666;margin-top:4px">Progress: ${persen.toFixed(1)}%</div>
+    </div>
+
+    <h4 style="font-size:13px;margin-bottom:8px;border-bottom:2px solid #289672;padding-bottom:4px;display:inline-block">Riwayat Pembayaran</h4>
+    <div style="max-height:200px;overflow-y:auto;margin-bottom:16px">
+      ${riwayat}
+    </div>
+
+    <button class="primary secondary" onclick="closeModal()">Tutup</button>
+  `);
+}
+
+function shareKeWA(nama, kode, blok) {
+  if (!kode || kode === 'undefined') return alert('Konsumen ini belum memiliki Kode Akses. Silakan edit data konsumen dan simpan ulang untuk generate kode.');
+  
+  const urlApp = window.location.origin + window.location.pathname;
+  const pesan = `Halo *${nama}*,\n\nBerikut adalah kode akses untuk melihat rincian angsuran tanah kavling Anda (Blok ${blok}):\n\n🔑 Kode Akses: *${kode}*\n\nSilakan buka link berikut:\n${urlApp}\n\nLalu klik tombol "🔍 Cek Angsuran Saya" dan masukkan kode di atas.\n\nTerima kasih.`;
+  
+  const waUrl = `https://wa.me/?text=${encodeURIComponent(pesan)}`;
+  window.open(waUrl, '_blank');
 }
 init();
 </script>
